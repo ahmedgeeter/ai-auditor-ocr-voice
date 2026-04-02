@@ -1,0 +1,156 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Light Mode Variables (Default) */
+  --color-bg:             #ffffff;
+  --color-surface:        #f8f9fa;
+  --color-surface-2:      #f1f3f5;
+  --color-surface-offset: #e9ecef;
+  --color-divider:        #dee2e6;
+  --color-border:         #ced4da;
+
+  --color-text:           #1a1918;
+  --color-text-muted:     #6c757d;
+  --color-text-faint:     #adb5bd;
+  --color-text-inverse:   #ffffff;
+
+  --color-primary:        #2d8070;
+  --color-primary-hover:  #1e5b4d;
+  --color-primary-highlight: rgba(45,128,112,0.05);
+
+  --color-warning:        #d97706;
+  --color-error:          #dc2626;
+  --color-success:        #16a34a;
+  
+  --shadow-sm: 0 2px 4px rgba(0,0,0,0.02);
+  --shadow-md: 0 10px 30px -10px rgba(0,0,0,0.08);
+  --shadow-lg: 0 20px 50px -15px rgba(0,0,0,0.12);
+}
+
+.dark {
+  /* Dark Mode Variables */
+  --color-bg:             #0d0c0b;
+  --color-surface:        #141312;
+  --color-surface-2:      #1a1917;
+  --color-surface-offset: #201e1c;
+  --color-divider:        #262422;
+  --color-border:         #2e2c29;
+
+  --color-text:           #d4d1cb;
+  --color-text-muted:     #8a8a80; /* Brighter for visibility */
+  --color-text-faint:     #5a5a54;
+
+  --color-primary:        #3d9c8a;
+  --color-primary-hover:  #2d8070;
+  --color-primary-highlight: rgba(61,156,138,0.15);
+
+  --shadow-sm: 0 4px 6px rgba(0,0,0,0.5);
+  --shadow-md: 0 10px 40px rgba(0,0,0,0.7);
+  --shadow-lg: 0 30px 70px rgba(0,0,0,0.9);
+}
+
+@keyframes jelly-float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-3px); } /* Much subtler */
+  100% { transform: translateY(0px); }
+}
+
+.jelly-float {
+  animation: jelly-float 8s ease-in-out infinite;
+}
+
+.neon-glow {
+  box-shadow: 0 0 20px rgba(61, 156, 138, 0.05), 0 0 40px rgba(61, 156, 138, 0.02);
+  border: 1px solid rgba(61, 156, 138, 0.15);
+  background: linear-gradient(135deg, var(--color-surface), var(--color-surface-offset));
+}
+
+.dark .neon-glow {
+  box-shadow: 0 15px 30px rgba(0,0,0,0.4), 0 0 40px rgba(61, 156, 138, 0.08);
+}
+
+/* Agency Noise Texture */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url('https://grainy-gradients.vercel.app/noise.svg');
+  opacity: 0.04;
+  pointer-events: none;
+  z-index: 9999;
+  mix-blend-mode: overlay;
+}
+
+/* Terminal Scanline Effect */
+.scanline::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    rgba(18, 16, 16, 0) 50%,
+    rgba(61, 156, 138, 0.02) 50%
+  );
+  background-size: 100% 4px;
+  pointer-events: none;
+  z-index: 10;
+  animation: scanline 10s linear infinite;
+}
+
+@keyframes scanline {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(100%); }
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: 'DM Sans', sans-serif;
+  transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1), color 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  font-weight: 500; /* Bolder globally */
+}
+
+h1, h2, h3, .font-serif {
+  font-family: 'Instrument Serif', serif;
+}
+
+code, pre, .font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.jelly-orb {
+  background: radial-gradient(circle at 30% 30%, var(--color-primary), #2d6b60);
+  filter: drop-shadow(0 0 40px rgba(61, 156, 138, 0.2));
+}
+
+@layer components {
+  .btn-accent {
+      @apply bg-[#3d9c8a] text-white dark:text-[#0d0c0b] font-bold uppercase tracking-[0.4em] text-[10px] hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 py-5 w-full rounded-sm shadow-md hover:shadow-lg min-h-[60px];
+      background-color: #3d9c8a !important;
+  }
+
+  .bg-dot-grid {
+    background-image: radial-gradient(var(--color-divider) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--color-bg); }
+::-webkit-scrollbar-thumb { background: var(--color-divider); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-border); }
+
+::selection {
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+}
