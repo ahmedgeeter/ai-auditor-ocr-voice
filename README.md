@@ -11,6 +11,9 @@
 
 ![contract-for-legal-services-sample](https://github.com/user-attachments/assets/5af9f0ff-d87c-45ae-a35e-55597c9152d6)
 
+<img width="1249" height="750" alt="image" src="https://github.com/user-attachments/assets/7fd8d541-1441-4b53-9ef8-968ceeddb9f1" />
+
+
 ---
 
 ##  Key Value Propositions
