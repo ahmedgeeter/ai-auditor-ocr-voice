@@ -6,12 +6,13 @@
 
 ![sample_contract_meridian_1775090452453](https://github.com/user-attachments/assets/f8d3c851-41e5-40c6-971e-9053755ebc48)
 
+<img width="1249" height="750" alt="image" src="https://github.com/user-attachments/assets/2e3c0bfb-adb6-4fbc-bbb3-29ae790b2f05" />
+
 
 <img width="943" height="730" alt="image" src="https://github.com/user-attachments/assets/beb8c2dd-ae44-4b14-82b1-f1a0a8659ab7" />
 
 ![contract-for-legal-services-sample](https://github.com/user-attachments/assets/5af9f0ff-d87c-45ae-a35e-55597c9152d6)
 
-<img width="1249" height="750" alt="image" src="https://github.com/user-attachments/assets/7fd8d541-1441-4b53-9ef8-968ceeddb9f1" />
 
 
 ---
