@@ -1,4 +1,4 @@
-# 🌐 Meridian | Autonomous AI Auditor & Neural Intelligence Hub
+#  Meridian | Autonomous AI Auditor & Neural Intelligence Hub
 
 **Meridian** is a production-grade, agency-level AI platform designed for corporate-scale document auditing and real-time vocal intelligence. Built with an editorial technical aesthetic, it leverages the cutting-edge **Meta Llama-4 Scout** engine and **Groq's LPL (Language Processing Units)** for near-instant neural responses.
 
@@ -13,7 +13,7 @@
 
 ---
 
-## 🚀 Key Value Propositions
+##  Key Value Propositions
 
 ### 1. **Autonomous Document Auditor (Multimodal OCR)**
 *   **Precision Extraction**: Leverages Meta Llama-4 Vision to extract structured data from complex invoices, IDs, and legal contracts with human-level accuracy.
@@ -32,7 +32,7 @@
 
 ---
 
-## 🛠 Tech Stack & Architecture
+##  Tech Stack & Architecture
 
 *   **Frontend**: React 18 (TypeScript) + Vite
 *   **Animation Engine**: Framer Motion (Spring Physics & Keyframe Orchestration)
@@ -44,7 +44,7 @@
 
 ---
 
-## ⚙️ Installation & Setup
+##  Installation & Setup
 
 Ensure you have [Node.js](https://nodejs.org/) installed on your machine.
 
@@ -72,7 +72,7 @@ Ensure you have [Node.js](https://nodejs.org/) installed on your machine.
 
 ---
 
-## 📐 Why Meridian?
+##  Why Meridian?
 
 Meridian isn't just a prototype; it's an **Agency-Ready Solution**. It demonstrates how to integrate high-end AI research into a stable, performant, and stunning user interface. Whether you are a freelance client looking for automation or a firm seeking a technical lead, Meridian showcases the ability to handle:
 *   **Complex API Orchestration**
@@ -82,7 +82,7 @@ Meridian isn't just a prototype; it's an **Agency-Ready Solution**. It demonstra
 
 ---
 
-## 👨‍💻 Author
+##  Author
 **Ahmed Gaiter**
 
 ---
