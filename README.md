@@ -2,7 +2,7 @@
 
 **Meridian** is a production-grade, agency-level AI platform designed for corporate-scale document auditing and real-time vocal intelligence. Built with an editorial technical aesthetic, it leverages the cutting-edge **Meta Llama-4 Scout** engine and **Groq's LPL (Language Processing Units)** for near-instant neural responses.
 
-![Meridian Banner](https://raw.githubusercontent.com/username/repo/master/screenshots/hero.png) *Note: Replace with your actual screenshot link*
+<img width="1320" height="725" alt="Screenshot 2026-04-02 031922" src="https://github.com/user-attachments/assets/05183e99-69f0-4ac5-8227-922c860f95fc" />
 
 ---
 
@@ -76,8 +76,7 @@ Meridian isn't just a prototype; it's an **Agency-Ready Solution**. It demonstra
 ---
 
 ## 👨‍💻 Author
-**[Your Name/Username]**
-*Freelance AI Engineer & Frontend Architect*
+**Ahmed Gaiter**
 
 ---
 *Developed with a focus on Technical Excellence and User Experience.*
