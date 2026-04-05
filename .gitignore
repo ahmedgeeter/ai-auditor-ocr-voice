@@ -35,3 +35,5 @@ public/samples/
 *.njsproj
 *.sln
 *.sw?
+.vercel
+.env*.local

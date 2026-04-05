@@ -1,50 +1,118 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, MicOff, Activity, Command, Volume2, Radio } from 'lucide-react';
+import { Mic, MicOff, Activity, Command, Radio, AlertTriangle, Clock } from 'lucide-react';
 import JellyOrb from './JellyOrb';
 import { getIntelligentResponse, transcribeAudio } from '../../lib/groq';
 
-const Voice = () => {
+interface VoiceProps {
+    context?: string;
+    onVoiceSuccess: (input: string, output: string) => void;
+}
+
+const Voice = ({ context, onVoiceSuccess }: VoiceProps) => {
     const [state, setState] = useState<'idle' | 'recording' | 'transcribing' | 'thinking' | 'speaking'>('idle');
     const [transcript, setTranscript] = useState('');
     const [response, setResponse] = useState('');
+    const [error, setError] = useState<string | null>(null);
+    const [timer, setTimer] = useState(0);
+    const [debugInfo, setDebugInfo] = useState<string>('');
     
     const mediaRecorder = useRef<MediaRecorder | null>(null);
     const audioChunks = useRef<Blob[]>([]);
+    const timerInterval = useRef<any>(null);
+    const startTimeRef = useRef<number>(0);
+
+    const resetToIdle = useCallback((errorMsg?: string) => {
+        if (errorMsg) setError(errorMsg);
+        setState('idle');
+        setTimer(0);
+        if (timerInterval.current) clearInterval(timerInterval.current);
+        if (mediaRecorder.current && mediaRecorder.current.state !== 'inactive') {
+            mediaRecorder.current.stop();
+        }
+    }, []);
 
     const startRecording = async () => {
+        if (state !== 'idle') return;
+        
+        setError(null);
+        setTranscript('');
+        setResponse('');
+        audioChunks.current = [];
+        setTimer(0);
+        startTimeRef.current = Date.now();
+        
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder.current = new MediaRecorder(stream);
-            audioChunks.current = [];
-            mediaRecorder.current.ondataavailable = (e) => audioChunks.current.push(e.data);
-            mediaRecorder.current.onstop = () => {
-                const audioBlob = new Blob(audioChunks.current, { type: 'audio/webm' });
-                handleAudioSequence(audioBlob);
+            const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg', 'audio/wav'];
+            const mimeType = types.find(t => MediaRecorder.isTypeSupported(t)) || 'audio/webm';
+            
+            setDebugInfo(mimeType.split('/')[1].toUpperCase());
+            mediaRecorder.current = new MediaRecorder(stream, { mimeType });
+            
+            mediaRecorder.current.ondataavailable = (e) => {
+                if (e.data.size > 0) audioChunks.current.push(e.data);
             };
-            mediaRecorder.current.start();
+
+            mediaRecorder.current.onstop = async () => {
+                const duration = (Date.now() - startTimeRef.current) / 1000;
+                const finalBlob = new Blob(audioChunks.current, { type: mimeType });
+                const sizeKB = Math.round(finalBlob.size / 1024);
+                
+                setDebugInfo(prev => `${prev.split(' | ')[0]} | ${sizeKB}KB`);
+                
+                if (finalBlob.size < 1000 || duration < 0.1) { 
+                    resetToIdle(`No audio (${sizeKB}KB)`);
+                } else {
+                    handleAudioSequence(finalBlob);
+                }
+            };
+
+            mediaRecorder.current.start(100);
             setState('recording');
-        } catch (err) { console.error(err); }
+            
+            timerInterval.current = setInterval(() => {
+                setTimer(prev => +(prev + 0.1).toFixed(1));
+            }, 100);
+
+        } catch (err: any) { 
+            resetToIdle(err.message === 'Permission denied' ? 'Mic access denied.' : 'Mic unavailable.');
+        }
     };
 
     const stopRecording = () => {
-        if (mediaRecorder.current && state === 'recording') {
-            mediaRecorder.current.stop();
-            mediaRecorder.current.stream.getTracks().forEach(t => t.stop());
+        if (state !== 'recording') return;
+        
+        setState('transcribing');
+        if (timerInterval.current) clearInterval(timerInterval.current);
+        
+        if (mediaRecorder.current) {
+            mediaRecorder.current.requestData();
+            setTimeout(() => {
+                if (mediaRecorder.current && mediaRecorder.current.state !== 'inactive') {
+                    mediaRecorder.current.stop();
+                    mediaRecorder.current.stream.getTracks().forEach(t => t.stop());
+                }
+            }, 300);
         }
     };
 
     const handleAudioSequence = async (blob: Blob) => {
-        setState('transcribing');
         try {
             const text = await transcribeAudio(blob);
+            if (!text || text.trim().length < 2) throw new Error('Unintelligible audio.');
             setTranscript(text);
+            
             setState('thinking');
-            const aiResponse = await getIntelligentResponse(text);
+            const aiResponse = await getIntelligentResponse(text, context);
             setResponse(aiResponse);
+            
             setState('speaking');
-            setTimeout(() => setState('idle'), 3000);
-        } catch (err) { setState('idle'); }
+            onVoiceSuccess(text, aiResponse);
+            setTimeout(() => setState('idle'), 6000);
+        } catch (err: any) { 
+            resetToIdle(err.message.includes('400') ? 'Response rejected by AI' : 'Voice processing failed');
+        }
     };
 
     useEffect(() => {
@@ -62,94 +130,106 @@ const Voice = () => {
         return () => {
             window.removeEventListener('keydown', handleKeyDown);
             window.removeEventListener('keyup', handleKeyUp);
+            if (timerInterval.current) clearInterval(timerInterval.current);
         };
-    }, [state]);
+    }, [state, startRecording, stopRecording]);
 
     return (
-        <div className="max-w-6xl mx-auto py-12">
-            <div className="grid lg:grid-cols-12 gap-20 items-center">
-                
-                {/* Visualizer Station */}
-                <div className="lg:col-span-5 flex flex-col items-center gap-16 jelly-float bg-[var(--color-surface-offset)] border border-[var(--color-border)] p-16 rounded-sm shadow-2xl neon-glow scanline relative">
-                    <div className="absolute top-4 left-4 p-2 opacity-10">
-                        <Radio size={14} className="text-[var(--color-primary)]" />
-                    </div>
-                    
-                    <div className="relative group">
-                        <div className="absolute -inset-10 bg-[var(--color-primary)]/5 rounded-full blur-[100px] opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
-                        <JellyOrb state={state} />
+        <div className="max-w-6xl mx-auto py-4">
+            <div className="grid lg:grid-cols-12 gap-12 items-start">
+                <div className="lg:col-span-5 flex flex-col gap-8 bg-[var(--color-surface)] border border-[var(--color-divider)] p-10 rounded-2xl shadow-[var(--shadow-lg)] relative">
+                    <div className="flex items-center justify-between text-[10px] font-mono font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
+                        <div className="flex items-center gap-2">
+                            <Radio size={12} className="text-[var(--color-primary)]" />
+                            <span>{debugInfo || 'Voice session'}</span>
+                        </div>
+                        {state === 'recording' && (
+                            <div className="flex items-center gap-2 text-[var(--color-primary)]">
+                                <Clock size={12} />
+                                <span>{timer}s</span>
+                            </div>
+                        )}
                     </div>
 
-                    <div className="flex flex-col items-center gap-8 w-full z-10">
-                        <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            transition={{ type: 'spring', damping: 15 }}
-                            onMouseDown={startRecording}
-                            onMouseUp={stopRecording}
-                            className={`w-36 h-36 rounded-full flex items-center justify-center transition-all shadow-2xl relative ${
-                                state === 'recording' ? 'bg-red-500 shadow-red-500/40 after:absolute after:inset-0 after:rounded-full after:bg-red-500 after:animate-ping after:opacity-20' : 'bg-[var(--color-primary)] shadow-[var(--color-primary)]/20'
-                            }`}
-                        >
-                            {state === 'recording' ? <MicOff size={44} className="text-white" /> : <Mic size={44} className="text-white" />}
-                        </motion.button>
-                        
-                        <div className="flex flex-col items-center gap-4">
-                             <div className="flex items-center gap-3">
-                                <div className={`w-2 h-2 rounded-full ${state === 'recording' ? 'bg-red-500 animate-pulse' : 'bg-[var(--color-primary)] opacity-40'}`} />
-                                <span className="text-[11px] font-black uppercase tracking-[0.5em] text-[var(--color-text)]">
-                                    {state === 'recording' ? 'Source_Transmitting' : 'Neural_Listen_Auto'}
+                    <div className="flex flex-col items-center gap-8">
+                        <JellyOrb state={state} />
+                        <div className="relative">
+                            <motion.button
+                                whileHover={state === 'idle' ? { scale: 1.03 } : {}}
+                                whileTap={state === 'idle' ? { scale: 0.98 } : {}}
+                                transition={{ type: 'spring', damping: 18 }}
+                                onMouseDown={startRecording}
+                                onMouseUp={stopRecording}
+                                onTouchStart={startRecording}
+                                onTouchEnd={stopRecording}
+                                disabled={state !== 'idle' && state !== 'recording'}
+                                className={`w-28 h-28 rounded-full flex items-center justify-center transition-all shadow-[var(--shadow-md)] relative ${
+                                    state === 'recording' ? 'bg-red-500 text-white' :
+                                    state === 'idle' ? 'bg-[var(--color-primary)] text-white cursor-pointer' :
+                                    'bg-gray-500/20 cursor-not-allowed opacity-50'
+                                }`}
+                            >
+                                {state === 'recording' ? <MicOff size={36} /> : <Mic size={36} />}
+                            </motion.button>
+
+                            <AnimatePresence>
+                                {error && (
+                                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="absolute -bottom-14 left-1/2 -translate-x-1/2 flex items-center gap-2 text-red-500 whitespace-nowrap bg-white px-4 py-2 rounded-full border border-red-500/30 shadow-[var(--shadow-sm)]">
+                                        <AlertTriangle size={12} />
+                                        <span className="text-[10px] font-semibold uppercase tracking-widest">{error}</span>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                        <div className="flex flex-col items-center gap-3">
+                            <div className="flex items-center gap-3">
+                                <div className={`w-2 h-2 rounded-full ${state !== 'idle' ? 'bg-[var(--color-primary)] animate-pulse' : 'bg-[var(--color-primary)] opacity-40'}`} />
+                                <span className="text-[11px] font-semibold uppercase tracking-[0.35em] text-[var(--color-text)]">
+                                    {state === 'recording' ? 'Recording' : state === 'transcribing' ? 'Transcribing' : state === 'thinking' ? 'Analyzing' : state === 'speaking' ? 'Responding' : 'Ready'}
                                 </span>
-                             </div>
-                             <span className="text-[9px] font-bold opacity-30 mt-2">LINKED_X82_STABLE</span>
+                            </div>
+                            <span className="text-[11px] font-semibold text-[var(--color-text-muted)]">Hold to record. Release to send.</span>
                         </div>
                     </div>
                 </div>
 
-                {/* Analytical Hub */}
-                <div className="lg:col-span-7 flex flex-col gap-10">
-                    <div className="bg-[var(--color-surface-2)] border border-[var(--color-divider)] p-12 rounded-sm shadow-xl neon-glow relative scanline">
-                        <div className="flex items-center gap-4 mb-10 opacity-30">
+                <div className="lg:col-span-7 flex flex-col gap-8">
+                    <div className="bg-[var(--color-surface-2)] border border-[var(--color-divider)] p-10 rounded-2xl shadow-[var(--shadow-md)] relative overflow-hidden">
+                        <div className="flex items-center gap-4 mb-6 text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
                             <Activity size={14} className="text-[var(--color-primary)]" />
-                            <span className="text-[10px] font-bold uppercase tracking-[0.4em]">Decoded_Waveform_Buffer</span>
+                            Transcript
                         </div>
                         <p className="font-serif text-2xl italic leading-relaxed text-[var(--color-text)] min-h-[100px]">
-                            {transcript || <span className="opacity-10 text-3xl">Waiting for audio packet synchronization...</span>}
+                            {transcript || <span className="opacity-20 text-2xl">Start speaking to generate a transcript.</span>}
                         </p>
                     </div>
 
-                    <div className="bg-[var(--color-surface)] border border-[var(--color-divider)] p-12 rounded-sm shadow-2xl neon-glow jelly-float flex flex-col min-h-[300px]" style={{ animationDelay: '2s' }}>
-                        <div className="flex items-center justify-between mb-10 border-b border-[var(--color-divider)] pb-6 opacity-60">
-                            <div className="flex items-center gap-4">
+                    <div className="bg-[var(--color-surface)] border border-[var(--color-divider)] p-10 rounded-2xl shadow-[var(--shadow-lg)] flex flex-col min-h-[300px]">
+                        <div className="flex items-center justify-between mb-8 border-b border-[var(--color-divider)] pb-4 text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
+                            <div className="flex items-center gap-3">
                                 <Command size={14} className="text-[var(--color-primary)]" />
-                                <span className="text-[10px] font-black uppercase tracking-[0.5em]">AI_Synthesized_Intel</span>
+                                AI Insights
                             </div>
-                            <div className="text-[10px] font-mono lowercase opacity-40">llama.v4.scout.secure</div>
+                            <div className="text-[10px] font-mono lowercase opacity-50">llama.v4.scout</div>
                         </div>
                         
-                        <div className="font-sans text-xl font-bold leading-loose text-[var(--color-text)] tracking-tight">
+                        <div className="font-sans text-lg font-semibold leading-relaxed text-[var(--color-text)] tracking-tight">
                             {response ? (
-                                <motion.p 
-                                    initial={{ opacity: 0, y: 5 }} 
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ type: 'spring', damping: 20 }}
-                                >{response}</motion.p>
+                                <motion.p initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}>{response}</motion.p>
                             ) : (
-                                <div className="space-y-4 opacity-5">
+                                <div className="space-y-4 opacity-10">
                                     <div className="h-4 w-full bg-current rounded-sm" />
                                     <div className="h-4 w-5/6 bg-current rounded-sm" />
-                                    <div className="h-4 w-4/6 bg-current rounded-sm" />
                                 </div>
                             )}
                         </div>
 
-                        {/* Status Footer for Consistency */}
-                        <div className="mt-auto pt-16 flex items-center justify-between opacity-20 text-[9px] font-mono font-bold uppercase tracking-[0.2em]">
+                        <div className="mt-auto pt-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 text-[10px] font-mono font-semibold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">
                              <div className="flex items-center gap-4">
-                                <span>STREAM_STABLE</span>
-                                <span>NEURAL_HUB_01</span>
+                                <span>Secure</span>
+                                <span>Context-aware</span>
                              </div>
-                             <span>SECURE_ENCRYPTED</span>
+                             <span>Response ready</span>
                         </div>
                     </div>
                 </div>
