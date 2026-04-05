@@ -18,6 +18,7 @@ function App() {
       badge: 'Talent-ready document intelligence',
       title: 'Audit resumes and hiring documents with confidence, then query insights by voice.',
       subtitle: 'This platform reviews uploaded PDFs or images, extracts structured fields, and highlights risks or missing data. After auditing, switch to Voice to ask follow-up questions and get instant, plain-language answers.',
+      stats: ['98% HR clarity', '1.2s avg scan', '24/7 voice'],
       cards: [
         { title: 'Fast triage', body: 'Surface key fields and confidence scores in seconds.' },
         { title: 'Safer hiring', body: 'Identify missing or inconsistent information early.' },
@@ -42,6 +43,7 @@ function App() {
       badge: 'ذكاء تدقيق المستندات للموارد البشرية',
       title: 'دقّق السير الذاتية ومستندات التوظيف بثقة، ثم اسأل بالبحث الصوتي فورًا.',
       subtitle: 'المنصة تراجع ملفات PDF أو الصور، تستخرج الحقول المنظمة، وتبرز المخاطر أو النقص. بعد التدقيق، استخدم المساعد الصوتي لأسئلة فورية وإجابات واضحة.',
+      stats: ['وضوح 98% للموارد البشرية', 'فحص خلال 1.2 ثانية', 'مساعد صوتي 24/7'],
       cards: [
         { title: 'فرز سريع', body: 'أظهر أهم الحقول ونسب الثقة خلال ثوانٍ.' },
         { title: 'توظيف أكثر أمانًا', body: 'اكتشف التناقضات أو النقص مبكرًا.' },
@@ -88,31 +90,31 @@ function App() {
         />
         
         <main className="max-w-[1200px] mx-auto px-5 sm:px-8 lg:px-10 py-10 lg:py-14">
-          <section className="grid lg:grid-cols-12 gap-8 lg:gap-12 items-center mb-10">
-            <div className="lg:col-span-7 space-y-5">
-              <div className="inline-flex items-center gap-3 rounded-full border border-[var(--color-divider)] bg-[var(--color-surface)] px-4 py-2 text-[10px] font-semibold tracking-[0.22em] uppercase text-[var(--color-text-muted)]">
+          <section className="grid lg:grid-cols-12 gap-10 lg:gap-12 items-center mb-10">
+            <div className="lg:col-span-7 space-y-6 fade-up">
+              <div className="inline-flex items-center gap-3 rounded-full border border-[var(--color-divider)] bg-white/80 px-4 py-2 text-[10px] font-semibold tracking-[0.26em] uppercase text-[var(--color-text-muted)] shadow-sm">
                 <span className="w-2 h-2 rounded-full bg-[var(--color-success)]" />
                 {copy[language].badge}
               </div>
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-serif font-bold tracking-tight">
-                {copy[language].title}
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-serif font-bold tracking-tight">
+                <span className="text-gradient">{copy[language].title}</span>
               </h1>
               <p className="text-[15px] sm:text-base text-[var(--color-text-muted)] leading-relaxed max-w-2xl">
                 {copy[language].subtitle}
               </p>
-              <div className="grid sm:grid-cols-3 gap-3 text-sm">
-                {copy[language].cards.map((item) => (
-                  <div key={item.title} className="p-4 rounded-lg bg-[var(--color-surface)] border border-[var(--color-divider)] shadow-[var(--shadow-sm)]">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--color-text-muted)] mb-2">
-                      {item.title}
+              <div className="grid sm:grid-cols-3 gap-3">
+                {copy[language].cards.map((item, index) => (
+                  <div key={item.title} className="glass-card rounded-2xl p-4 border border-[var(--color-divider)] transition-all hover:-translate-y-1 hover:shadow-lg">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[var(--color-text-muted)] mb-2">
+                      0{index + 1} — {item.title}
                     </div>
                     <div className="text-[13px] text-[var(--color-text)] leading-relaxed">{item.body}</div>
                   </div>
                 ))}
               </div>
             </div>
-            <div className="lg:col-span-5">
-              <div className="rounded-2xl border border-[var(--color-divider)] bg-[var(--color-surface)] shadow-[var(--shadow-md)] p-6">
+            <div className="lg:col-span-5 space-y-4 fade-up">
+              <div className="glass-card rounded-3xl p-6 border border-[var(--color-divider)] shadow-[var(--shadow-md)] float-slow">
                 <div className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)] mb-4">{copy[language].howTitle}</div>
                 <ol className="space-y-3 text-[13px] text-[var(--color-text)]">
                   {copy[language].how.map((item, index) => (
@@ -122,6 +124,13 @@ function App() {
                     </li>
                   ))}
                 </ol>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {copy[language].stats.map((stat) => (
+                  <div key={stat} className="glass-card rounded-2xl p-3 text-center text-[11px] font-semibold text-[var(--color-text-muted)]">
+                    {stat}
+                  </div>
+                ))}
               </div>
             </div>
           </section>

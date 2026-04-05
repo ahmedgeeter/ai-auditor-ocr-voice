@@ -266,7 +266,7 @@ const Voice = ({ context, onVoiceSuccess, language = 'en' }: VoiceProps) => {
     return (
         <div className="max-w-5xl mx-auto py-4">
             <div className="grid lg:grid-cols-12 gap-8 items-start">
-                <div className="lg:col-span-5 flex flex-col gap-6 bg-[var(--color-surface)] border border-[var(--color-divider)] p-8 rounded-2xl shadow-[var(--shadow-lg)] relative">
+                <div className="lg:col-span-5 flex flex-col gap-6 glass-card border border-[var(--color-divider)] p-8 rounded-3xl shadow-[var(--shadow-lg)] relative fade-up">
                     <div className="flex items-center justify-between text-[10px] font-mono font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
                         <div className="flex items-center gap-2">
                             <Radio size={12} className="text-[var(--color-primary)]" />
@@ -281,7 +281,9 @@ const Voice = ({ context, onVoiceSuccess, language = 'en' }: VoiceProps) => {
                     </div>
 
                     <div className="flex flex-col items-center gap-8">
-                        <JellyOrb state={state} />
+                        <div className="float-slow">
+                            <JellyOrb state={state} />
+                        </div>
                         <div className="relative">
                             <motion.button
                                 whileHover={state === 'idle' ? { scale: 1.03 } : {}}
@@ -331,7 +333,7 @@ const Voice = ({ context, onVoiceSuccess, language = 'en' }: VoiceProps) => {
                 </div>
 
                 <div className="lg:col-span-7 flex flex-col gap-6">
-                    <div className="bg-[var(--color-surface-2)] border border-[var(--color-divider)] p-8 rounded-2xl shadow-[var(--shadow-md)] relative overflow-hidden">
+                    <div className="glass-card border border-[var(--color-divider)] p-8 rounded-3xl shadow-[var(--shadow-md)] relative overflow-hidden fade-up">
                         <div className="flex items-center gap-4 mb-6 text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
                             <Activity size={14} className="text-[var(--color-primary)]" />
                             {labels.transcript}
@@ -348,7 +350,7 @@ const Voice = ({ context, onVoiceSuccess, language = 'en' }: VoiceProps) => {
                         </p>
                     </div>
 
-                    <div className="bg-[var(--color-surface)] border border-[var(--color-divider)] p-8 rounded-2xl shadow-[var(--shadow-lg)] flex flex-col min-h-[260px]">
+                    <div className="glass-card border border-[var(--color-divider)] p-8 rounded-3xl shadow-[var(--shadow-lg)] flex flex-col min-h-[260px] fade-up">
                         <div className="flex items-center justify-between mb-8 border-b border-[var(--color-divider)] pb-4 text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
                             <div className="flex items-center gap-3">
                                 <Command size={14} className="text-[var(--color-primary)]" />

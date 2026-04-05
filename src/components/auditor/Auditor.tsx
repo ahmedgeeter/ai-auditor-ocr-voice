@@ -115,7 +115,7 @@ const Auditor = ({ onAuditSuccess, language = 'en' }: AuditorProps) => {
 
     return (
         <div className="flex flex-col gap-10">
-            <div className={`flex flex-col gap-4 ${isRtl ? 'border-r-2 pr-5' : 'border-l-2 pl-5'} border-[var(--color-primary)]`}>
+            <div className={`flex flex-col gap-4 ${isRtl ? 'border-r-2 pr-5' : 'border-l-2 pl-5'} border-[var(--color-primary)] fade-up`}>
                 <div className="flex items-center gap-4">
                    <span className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[var(--color-primary)]">{labels.badge}</span>
                    <div className="h-px w-20 bg-[var(--color-divider)]" />
@@ -127,8 +127,8 @@ const Auditor = ({ onAuditSuccess, language = 'en' }: AuditorProps) => {
             </div>
 
             <div className="grid lg:grid-cols-12 gap-8 items-start mt-6">
-                <div className="lg:col-span-5 flex flex-col gap-5">
-                    <div className="relative aspect-[3/4] border border-[var(--color-divider)] rounded-2xl overflow-hidden bg-[var(--color-surface-2)] shadow-[var(--shadow-md)]">
+                <div className="lg:col-span-5 flex flex-col gap-5 fade-up">
+                    <div className="relative aspect-[3/4] border border-[var(--color-divider)] rounded-3xl overflow-hidden bg-[var(--color-surface-2)] shadow-[var(--shadow-md)]">
                         <div className="absolute inset-0 z-0 bg-dot-grid opacity-10" />
                         {!preview ? (
                             <label className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer group">
@@ -137,6 +137,7 @@ const Auditor = ({ onAuditSuccess, language = 'en' }: AuditorProps) => {
                                     <FileText className="opacity-40 group-hover:opacity-100 group-hover:text-[var(--color-primary)] transition-all" size={24} />
                                 </div>
                                 <span className="mt-6 text-[10px] font-semibold uppercase tracking-[0.3em] opacity-50">{labels.upload}</span>
+                                <span className="mt-3 text-[12px] text-[var(--color-text-muted)]">PDF, JPG, PNG</span>
                             </label>
                         ) : (
                             <div className="absolute inset-0 p-4 flex flex-col">
@@ -163,7 +164,7 @@ const Auditor = ({ onAuditSuccess, language = 'en' }: AuditorProps) => {
                     )}
                 </div>
 
-                <div className="lg:col-span-7 bg-[var(--color-surface)] border border-[var(--color-divider)] rounded-2xl min-h-[620px] relative overflow-hidden shadow-[var(--shadow-lg)] flex flex-col p-8 sm:p-10">
+                <div className="lg:col-span-7 glass-card border border-[var(--color-divider)] rounded-3xl min-h-[620px] relative overflow-hidden shadow-[var(--shadow-lg)] flex flex-col p-8 sm:p-10 fade-up">
                     <div className="absolute inset-0 opacity-[0.04] pointer-events-none bg-dot-grid bg-[size:40px_40px]" />
                     
                     {!report && !loading && !error && (
@@ -205,7 +206,7 @@ const Auditor = ({ onAuditSuccess, language = 'en' }: AuditorProps) => {
                     )}
 
                     {report && !loading && (
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-14 relative z-10">
+                        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col gap-12 relative z-10">
                             <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 border-b border-[var(--color-divider)] pb-6">
                                 <div className="flex flex-col gap-2">
                                      <div className="flex items-center gap-2">
