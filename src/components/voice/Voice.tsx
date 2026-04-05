@@ -6,29 +6,76 @@ import { getIntelligentResponse, transcribeAudio } from '../../lib/groq';
 
 interface VoiceProps {
     context?: string;
+    language?: 'en' | 'ar';
     onVoiceSuccess: (input: string, output: string) => void;
 }
 
-const Voice = ({ context, onVoiceSuccess }: VoiceProps) => {
+const Voice = ({ context, onVoiceSuccess, language = 'en' }: VoiceProps) => {
     const [state, setState] = useState<'idle' | 'recording' | 'transcribing' | 'thinking' | 'speaking'>('idle');
     const [transcript, setTranscript] = useState('');
+    const [liveTranscript, setLiveTranscript] = useState('');
     const [response, setResponse] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [timer, setTimer] = useState(0);
     const [debugInfo, setDebugInfo] = useState<string>('');
+    const [isLiveSupported, setIsLiveSupported] = useState(false);
+
+    const labels = language === 'ar'
+        ? {
+            session: 'جلسة صوتية',
+            live: 'نسخ صوتي مباشر',
+            recording: 'جاري التسجيل',
+            transcribing: 'جاري التفريغ',
+            thinking: 'جاري التحليل',
+            speaking: 'جاري الرد',
+            ready: 'جاهز',
+            hold: 'اضغط للتحدث. النص يظهر فوراً.',
+            transcript: 'النص',
+            insights: 'تحليلات ذكية',
+            placeholder: 'ابدأ الكلام للحصول على النص.',
+            secure: 'آمن',
+            context: 'سياقي',
+            response: 'الرد جاهز'
+        }
+        : {
+            session: 'Voice session',
+            live: 'Live transcription',
+            recording: 'Recording',
+            transcribing: 'Transcribing',
+            thinking: 'Analyzing',
+            speaking: 'Responding',
+            ready: 'Ready',
+            hold: 'Hold to speak. Live text updates instantly.',
+            transcript: 'Transcript',
+            insights: 'AI Insights',
+            placeholder: 'Start speaking to generate a transcript.',
+            secure: 'Secure',
+            context: 'Context-aware',
+            response: 'Response ready'
+        };
     
     const mediaRecorder = useRef<MediaRecorder | null>(null);
     const audioChunks = useRef<Blob[]>([]);
     const timerInterval = useRef<any>(null);
     const startTimeRef = useRef<number>(0);
+    const recognitionRef = useRef<any>(null);
+    const finalTranscriptRef = useRef<string>('');
+    const stopRequestedRef = useRef(false);
 
     const resetToIdle = useCallback((errorMsg?: string) => {
         if (errorMsg) setError(errorMsg);
         setState('idle');
         setTimer(0);
+        setLiveTranscript('');
         if (timerInterval.current) clearInterval(timerInterval.current);
         if (mediaRecorder.current && mediaRecorder.current.state !== 'inactive') {
             mediaRecorder.current.stop();
+        }
+        if (recognitionRef.current) {
+            recognitionRef.current.onresult = null;
+            recognitionRef.current.onerror = null;
+            recognitionRef.current.onend = null;
+            recognitionRef.current.stop?.();
         }
     }, []);
 
@@ -37,10 +84,27 @@ const Voice = ({ context, onVoiceSuccess }: VoiceProps) => {
         
         setError(null);
         setTranscript('');
+        setLiveTranscript('');
         setResponse('');
         audioChunks.current = [];
         setTimer(0);
         startTimeRef.current = Date.now();
+        finalTranscriptRef.current = '';
+        stopRequestedRef.current = false;
+
+        if (isLiveSupported && recognitionRef.current) {
+            try {
+                recognitionRef.current.start();
+                setDebugInfo('LIVE STT');
+                setState('recording');
+                timerInterval.current = setInterval(() => {
+                    setTimer(prev => +(prev + 0.1).toFixed(1));
+                }, 100);
+                return;
+            } catch (err: any) {
+                setDebugInfo('FALLBACK');
+            }
+        }
         
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -85,6 +149,12 @@ const Voice = ({ context, onVoiceSuccess }: VoiceProps) => {
         
         setState('transcribing');
         if (timerInterval.current) clearInterval(timerInterval.current);
+
+        if (isLiveSupported && recognitionRef.current) {
+            stopRequestedRef.current = true;
+            recognitionRef.current.stop();
+            return;
+        }
         
         if (mediaRecorder.current) {
             mediaRecorder.current.requestData();
@@ -109,11 +179,70 @@ const Voice = ({ context, onVoiceSuccess }: VoiceProps) => {
             
             setState('speaking');
             onVoiceSuccess(text, aiResponse);
-            setTimeout(() => setState('idle'), 6000);
+            setTimeout(() => setState('idle'), 4500);
         } catch (err: any) { 
             resetToIdle(err.message.includes('400') ? 'Response rejected by AI' : 'Voice processing failed');
         }
     };
+
+    const handleLiveTranscript = useCallback(async () => {
+        const finalText = finalTranscriptRef.current.trim();
+        if (!finalText) {
+            resetToIdle('No speech captured.');
+            return;
+        }
+
+        try {
+            setTranscript(finalText);
+            setLiveTranscript('');
+            setState('thinking');
+            const aiResponse = await getIntelligentResponse(finalText, context);
+            setResponse(aiResponse);
+            setState('speaking');
+            onVoiceSuccess(finalText, aiResponse);
+            setTimeout(() => setState('idle'), 4500);
+        } catch (err: any) {
+            resetToIdle(err.message?.includes?.('400') ? 'Response rejected by AI' : 'Voice processing failed');
+        }
+    }, [context, onVoiceSuccess, resetToIdle]);
+
+    useEffect(() => {
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (SpeechRecognition) {
+            const recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = navigator.language || 'en-US';
+            recognition.onresult = (event: any) => {
+                let interim = '';
+                for (let i = event.resultIndex; i < event.results.length; i += 1) {
+                    const result = event.results[i];
+                    const text = result[0]?.transcript || '';
+                    if (result.isFinal) {
+                        finalTranscriptRef.current = `${finalTranscriptRef.current} ${text}`.trim();
+                        setTranscript(finalTranscriptRef.current);
+                    } else {
+                        interim += text;
+                    }
+                }
+                setLiveTranscript(interim.trim());
+            };
+            recognition.onerror = () => {
+                if (!stopRequestedRef.current) {
+                    resetToIdle('Live transcription failed.');
+                }
+            };
+            recognition.onend = () => {
+                if (stopRequestedRef.current) {
+                    handleLiveTranscript();
+                }
+            };
+            recognitionRef.current = recognition;
+            setIsLiveSupported(true);
+        } else {
+            setIsLiveSupported(false);
+        }
+    }, [handleLiveTranscript, resetToIdle]);
 
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -135,13 +264,13 @@ const Voice = ({ context, onVoiceSuccess }: VoiceProps) => {
     }, [state, startRecording, stopRecording]);
 
     return (
-        <div className="max-w-6xl mx-auto py-4">
-            <div className="grid lg:grid-cols-12 gap-12 items-start">
-                <div className="lg:col-span-5 flex flex-col gap-8 bg-[var(--color-surface)] border border-[var(--color-divider)] p-10 rounded-2xl shadow-[var(--shadow-lg)] relative">
+        <div className="max-w-5xl mx-auto py-4">
+            <div className="grid lg:grid-cols-12 gap-8 items-start">
+                <div className="lg:col-span-5 flex flex-col gap-6 bg-[var(--color-surface)] border border-[var(--color-divider)] p-8 rounded-2xl shadow-[var(--shadow-lg)] relative">
                     <div className="flex items-center justify-between text-[10px] font-mono font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
                         <div className="flex items-center gap-2">
                             <Radio size={12} className="text-[var(--color-primary)]" />
-                            <span>{debugInfo || 'Voice session'}</span>
+                            <span>{debugInfo || (isLiveSupported ? labels.live : labels.session)}</span>
                         </div>
                         {state === 'recording' && (
                             <div className="flex items-center gap-2 text-[var(--color-primary)]">
@@ -163,13 +292,13 @@ const Voice = ({ context, onVoiceSuccess }: VoiceProps) => {
                                 onTouchStart={startRecording}
                                 onTouchEnd={stopRecording}
                                 disabled={state !== 'idle' && state !== 'recording'}
-                                className={`w-28 h-28 rounded-full flex items-center justify-center transition-all shadow-[var(--shadow-md)] relative ${
+                                className={`w-24 h-24 rounded-full flex items-center justify-center transition-all shadow-[var(--shadow-md)] relative ${
                                     state === 'recording' ? 'bg-red-500 text-white' :
                                     state === 'idle' ? 'bg-[var(--color-primary)] text-white cursor-pointer' :
                                     'bg-gray-500/20 cursor-not-allowed opacity-50'
                                 }`}
                             >
-                                {state === 'recording' ? <MicOff size={36} /> : <Mic size={36} />}
+                                {state === 'recording' ? <MicOff size={30} /> : <Mic size={30} />}
                             </motion.button>
 
                             <AnimatePresence>
@@ -185,30 +314,45 @@ const Voice = ({ context, onVoiceSuccess }: VoiceProps) => {
                             <div className="flex items-center gap-3">
                                 <div className={`w-2 h-2 rounded-full ${state !== 'idle' ? 'bg-[var(--color-primary)] animate-pulse' : 'bg-[var(--color-primary)] opacity-40'}`} />
                                 <span className="text-[11px] font-semibold uppercase tracking-[0.35em] text-[var(--color-text)]">
-                                    {state === 'recording' ? 'Recording' : state === 'transcribing' ? 'Transcribing' : state === 'thinking' ? 'Analyzing' : state === 'speaking' ? 'Responding' : 'Ready'}
+                                    {state === 'recording'
+                                        ? labels.recording
+                                        : state === 'transcribing'
+                                            ? labels.transcribing
+                                            : state === 'thinking'
+                                                ? labels.thinking
+                                                : state === 'speaking'
+                                                    ? labels.speaking
+                                                    : labels.ready}
                                 </span>
                             </div>
-                            <span className="text-[11px] font-semibold text-[var(--color-text-muted)]">Hold to record. Release to send.</span>
+                            <span className="text-[11px] font-semibold text-[var(--color-text-muted)]">{labels.hold}</span>
                         </div>
                     </div>
                 </div>
 
-                <div className="lg:col-span-7 flex flex-col gap-8">
-                    <div className="bg-[var(--color-surface-2)] border border-[var(--color-divider)] p-10 rounded-2xl shadow-[var(--shadow-md)] relative overflow-hidden">
+                <div className="lg:col-span-7 flex flex-col gap-6">
+                    <div className="bg-[var(--color-surface-2)] border border-[var(--color-divider)] p-8 rounded-2xl shadow-[var(--shadow-md)] relative overflow-hidden">
                         <div className="flex items-center gap-4 mb-6 text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
                             <Activity size={14} className="text-[var(--color-primary)]" />
-                            Transcript
+                            {labels.transcript}
                         </div>
-                        <p className="font-serif text-2xl italic leading-relaxed text-[var(--color-text)] min-h-[100px]">
-                            {transcript || <span className="opacity-20 text-2xl">Start speaking to generate a transcript.</span>}
+                        <p className="font-serif text-xl italic leading-relaxed text-[var(--color-text)] min-h-[90px]">
+                            {transcript || liveTranscript ? (
+                                <>
+                                    {transcript}
+                                    {liveTranscript && <span className="text-[var(--color-text-muted)]"> {liveTranscript}</span>}
+                                </>
+                            ) : (
+                                <span className="opacity-20 text-xl">{labels.placeholder}</span>
+                            )}
                         </p>
                     </div>
 
-                    <div className="bg-[var(--color-surface)] border border-[var(--color-divider)] p-10 rounded-2xl shadow-[var(--shadow-lg)] flex flex-col min-h-[300px]">
+                    <div className="bg-[var(--color-surface)] border border-[var(--color-divider)] p-8 rounded-2xl shadow-[var(--shadow-lg)] flex flex-col min-h-[260px]">
                         <div className="flex items-center justify-between mb-8 border-b border-[var(--color-divider)] pb-4 text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
                             <div className="flex items-center gap-3">
                                 <Command size={14} className="text-[var(--color-primary)]" />
-                                AI Insights
+                                {labels.insights}
                             </div>
                             <div className="text-[10px] font-mono lowercase opacity-50">llama.v4.scout</div>
                         </div>
@@ -226,10 +370,10 @@ const Voice = ({ context, onVoiceSuccess }: VoiceProps) => {
 
                         <div className="mt-auto pt-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 text-[10px] font-mono font-semibold uppercase tracking-[0.2em] text-[var(--color-text-muted)]">
                              <div className="flex items-center gap-4">
-                                <span>Secure</span>
-                                <span>Context-aware</span>
+                                <span>{labels.secure}</span>
+                                <span>{labels.context}</span>
                              </div>
-                             <span>Response ready</span>
+                             <span>{labels.response}</span>
                         </div>
                     </div>
                 </div>

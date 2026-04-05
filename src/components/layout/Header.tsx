@@ -8,16 +8,18 @@ interface HeaderProps {
   isDark: boolean;
   onToggleDark: () => void;
   onOpenHistory: () => void;
+  language: 'en' | 'ar';
+  onToggleLanguage: () => void;
 }
 
-const Header = ({ activeMode, onModeChange, isDark, onToggleDark, onOpenHistory }: HeaderProps) => {
+const Header = ({ activeMode, onModeChange, isDark, onToggleDark, onOpenHistory, language, onToggleLanguage }: HeaderProps) => {
   return (
-    <header className="sticky top-0 z-50 bg-[var(--color-bg)]/95 backdrop-blur-md border-b border-[var(--color-divider)] px-6 sm:px-10 lg:px-12 py-4 transition-colors duration-400">
-      <div className="max-w-[1600px] mx-auto flex flex-wrap gap-4 items-center justify-between">
-        <div className="flex items-center gap-6">
+    <header className="sticky top-0 z-50 bg-[var(--color-bg)]/95 backdrop-blur-md border-b border-[var(--color-divider)] px-5 sm:px-8 lg:px-10 py-3 transition-colors duration-400">
+      <div className="max-w-[1200px] mx-auto flex flex-wrap gap-4 items-center justify-between">
+        <div className="flex items-center gap-5">
           <div className="flex flex-col">
-            <span className="text-xl font-serif font-bold text-[var(--color-text)] tracking-tight">Meridian</span>
-            <span className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[var(--color-primary)] opacity-80">AI Audit Suite</span>
+            <span className="text-lg font-serif font-bold text-[var(--color-text)] tracking-tight">Meridian</span>
+            <span className="text-[9px] font-semibold uppercase tracking-[0.28em] text-[var(--color-primary)] opacity-80">AI Audit Suite</span>
           </div>
           <div className="hidden md:flex items-center gap-6 border-l border-[var(--color-divider)] pl-6">
             <div className="flex items-center gap-2">
@@ -36,7 +38,7 @@ const Header = ({ activeMode, onModeChange, isDark, onToggleDark, onOpenHistory 
             <button
               key={mode}
               onClick={() => onModeChange(mode)}
-              className={`relative px-6 sm:px-8 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] transition-all ${
+              className={`relative px-4 sm:px-6 py-1.5 text-[9px] font-semibold uppercase tracking-[0.2em] transition-all ${
                 activeMode === mode ? 'text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
               }`}
             >
@@ -52,20 +54,31 @@ const Header = ({ activeMode, onModeChange, isDark, onToggleDark, onOpenHistory 
           ))}
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
            <button 
              onClick={onToggleDark}
              title="Toggle Theme"
-             className="w-10 h-10 flex items-center justify-center border border-[var(--color-border)] rounded-full hover:bg-[var(--color-surface-offset)] transition-colors group"
+             className="w-9 h-9 flex items-center justify-center border border-[var(--color-border)] rounded-full hover:bg-[var(--color-surface-offset)] transition-colors group"
            >
-              {isDark ? <Sun size={16} className="opacity-50 group-hover:opacity-100" /> : <Moon size={16} className="opacity-50 group-hover:opacity-100" />}
+              {isDark ? <Sun size={15} className="opacity-50 group-hover:opacity-100" /> : <Moon size={15} className="opacity-50 group-hover:opacity-100" />}
+           </button>
+           <button
+             onClick={onToggleLanguage}
+             className="flex items-center gap-2 px-3 py-1.5 border border-[var(--color-border)] rounded-full hover:bg-[var(--color-surface-offset)] transition-colors group"
+             title={language === 'en' ? 'Switch to Arabic' : 'التبديل إلى الإنجليزية'}
+           >
+             <span className="text-[9px] font-semibold uppercase tracking-widest">
+               {language === 'en' ? 'AR' : 'EN'}
+             </span>
            </button>
            <button 
               onClick={onOpenHistory}
-              className="flex items-center gap-2 px-4 py-2 border border-[var(--color-border)] rounded-full hover:bg-[var(--color-surface-offset)] transition-colors group"
+              className="flex items-center gap-2 px-3 py-1.5 border border-[var(--color-border)] rounded-full hover:bg-[var(--color-surface-offset)] transition-colors group"
             >
-              <Clock size={14} className="opacity-40 group-hover:text-[var(--color-primary)] transition-colors" />
-              <span className="text-[10px] font-semibold uppercase tracking-widest">History</span>
+              <Clock size={13} className="opacity-40 group-hover:text-[var(--color-primary)] transition-colors" />
+              <span className="text-[9px] font-semibold uppercase tracking-widest">
+                {language === 'en' ? 'History' : 'السجل'}
+              </span>
            </button>
         </div>
       </div>

@@ -7,10 +7,11 @@ import * as pdfjs from 'pdfjs-dist';
 pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
 interface AuditorProps {
+    language?: 'en' | 'ar';
     onAuditSuccess: (report: any) => void;
 }
 
-const Auditor = ({ onAuditSuccess }: AuditorProps) => {
+const Auditor = ({ onAuditSuccess, language = 'en' }: AuditorProps) => {
     const [file, setFile] = useState<File | null>(null);
     const [preview, setPreview] = useState<string | null>(null);
     const [report, setReport] = useState<any>(null);
@@ -74,21 +75,59 @@ const Auditor = ({ onAuditSuccess }: AuditorProps) => {
         }
     };
 
+    const labels = language === 'ar'
+        ? {
+            badge: 'مدقق المستندات',
+            title: 'ارفع مستند المرشح وراجع النتائج بسرعة.',
+            subtitle: 'استخرج الحقول الأساسية، تحقق من نسب الثقة، واحصل على ملاحظات المطابقة لتسريع قرار التوظيف.',
+            upload: 'ارفع المستند',
+            preview: 'المعاينة جاهزة',
+            remove: 'حذف',
+            run: 'تشغيل التدقيق',
+            processing: 'جاري المعالجة...',
+            awaiting: 'في انتظار مستند',
+            issue: 'مشكلة في المعالجة',
+            retry: 'إعادة المحاولة',
+            summary: 'ملخص التدقيق',
+            confidence: 'الثقة',
+            notes: 'ملاحظات المطابقة',
+            fallback: 'لا توجد ملاحظات حرجة في المستند.'
+        }
+        : {
+            badge: 'Document Auditor',
+            title: 'Upload and review candidate documents.',
+            subtitle: 'Extract key fields, validate confidence scores, and surface compliance notes for faster recruiter decisions.',
+            upload: 'Upload document',
+            preview: 'Preview ready',
+            remove: 'Remove',
+            run: 'Run audit',
+            processing: 'Processing document...',
+            awaiting: 'Awaiting document',
+            issue: 'Processing issue',
+            retry: 'Retry audit',
+            summary: 'Audit summary',
+            confidence: 'Confidence',
+            notes: 'Compliance notes',
+            fallback: 'No critical anomalies detected in the input stream buffer.'
+        };
+
+    const isRtl = language === 'ar';
+
     return (
-        <div className="flex flex-col gap-12">
-            <div className="flex flex-col gap-4 border-l-2 border-[var(--color-primary)] pl-6">
+        <div className="flex flex-col gap-10">
+            <div className={`flex flex-col gap-4 ${isRtl ? 'border-r-2 pr-5' : 'border-l-2 pl-5'} border-[var(--color-primary)]`}>
                 <div className="flex items-center gap-4">
-                   <span className="text-[11px] font-semibold uppercase tracking-[0.4em] text-[var(--color-primary)]">Document Auditor</span>
-                   <div className="h-px w-24 bg-[var(--color-divider)]" />
+                   <span className="text-[10px] font-semibold uppercase tracking-[0.35em] text-[var(--color-primary)]">{labels.badge}</span>
+                   <div className="h-px w-20 bg-[var(--color-divider)]" />
                 </div>
-                <h2 className="text-4xl sm:text-5xl font-serif font-bold text-[var(--color-text)] tracking-tight">Upload and review candidate documents.</h2>
-                <p className="max-w-2xl text-sm sm:text-base text-[var(--color-text-muted)] leading-relaxed font-medium">
-                    Extract key fields, validate confidence scores, and surface compliance notes for faster recruiter decisions.
+                <h2 className="text-3xl sm:text-4xl font-serif font-bold text-[var(--color-text)] tracking-tight">{labels.title}</h2>
+                <p className="max-w-2xl text-[13px] sm:text-[15px] text-[var(--color-text-muted)] leading-relaxed font-medium">
+                    {labels.subtitle}
                 </p>
             </div>
 
-            <div className="grid lg:grid-cols-12 gap-12 items-start mt-8">
-                <div className="lg:col-span-5 flex flex-col gap-6">
+            <div className="grid lg:grid-cols-12 gap-8 items-start mt-6">
+                <div className="lg:col-span-5 flex flex-col gap-5">
                     <div className="relative aspect-[3/4] border border-[var(--color-divider)] rounded-2xl overflow-hidden bg-[var(--color-surface-2)] shadow-[var(--shadow-md)]">
                         <div className="absolute inset-0 z-0 bg-dot-grid opacity-10" />
                         {!preview ? (
@@ -97,13 +136,13 @@ const Auditor = ({ onAuditSuccess }: AuditorProps) => {
                                 <div className="w-16 h-16 rounded-2xl border border-[var(--color-divider)] flex items-center justify-center group-hover:border-[var(--color-primary)] transition-all bg-white shadow-[var(--shadow-sm)]">
                                     <FileText className="opacity-40 group-hover:opacity-100 group-hover:text-[var(--color-primary)] transition-all" size={24} />
                                 </div>
-                                <span className="mt-6 text-[11px] font-semibold uppercase tracking-[0.3em] opacity-50">Upload document</span>
+                                <span className="mt-6 text-[10px] font-semibold uppercase tracking-[0.3em] opacity-50">{labels.upload}</span>
                             </label>
                         ) : (
                             <div className="absolute inset-0 p-4 flex flex-col">
                                 <div className="flex justify-between items-center mb-4 px-2">
-                                    <span className="text-[10px] font-mono font-semibold uppercase opacity-40 tracking-widest">Preview ready</span>
-                                    <button onClick={() => setPreview(null)} className="text-[10px] font-semibold uppercase tracking-widest hover:text-[var(--color-error)] transition-colors text-[var(--color-text-muted)]">Remove</button>
+                                    <span className="text-[9px] font-mono font-semibold uppercase opacity-40 tracking-widest">{labels.preview}</span>
+                                    <button onClick={() => setPreview(null)} className="text-[9px] font-semibold uppercase tracking-widest hover:text-[var(--color-error)] transition-colors text-[var(--color-text-muted)]">{labels.remove}</button>
                                 </div>
                                 <div className="flex-1 rounded-xl overflow-hidden border border-[var(--color-divider)] bg-white flex items-center justify-center relative">
                                     <img src={preview} className="max-w-full max-h-full object-contain" />
@@ -119,18 +158,18 @@ const Auditor = ({ onAuditSuccess }: AuditorProps) => {
                             className="btn-accent"
                         >
                             {loading ? <Cpu className="animate-spin" size={14} /> : <Scan size={14} />}
-                            <span>{loading ? 'Processing document...' : 'Run audit'}</span>
+                            <span>{loading ? labels.processing : labels.run}</span>
                         </motion.button>
                     )}
                 </div>
 
-                <div className="lg:col-span-7 bg-[var(--color-surface)] border border-[var(--color-divider)] rounded-2xl min-h-[700px] relative overflow-hidden shadow-[var(--shadow-lg)] flex flex-col p-10 sm:p-14">
+                <div className="lg:col-span-7 bg-[var(--color-surface)] border border-[var(--color-divider)] rounded-2xl min-h-[620px] relative overflow-hidden shadow-[var(--shadow-lg)] flex flex-col p-8 sm:p-10">
                     <div className="absolute inset-0 opacity-[0.04] pointer-events-none bg-dot-grid bg-[size:40px_40px]" />
                     
                     {!report && !loading && !error && (
                         <div className="h-full flex flex-col items-center justify-center text-center opacity-20">
                             <Layers size={48} strokeWidth={1} className="mb-6" />
-                            <span className="text-[11px] font-semibold uppercase tracking-[0.4em]">Awaiting document</span>
+                            <span className="text-[10px] font-semibold uppercase tracking-[0.4em]">{labels.awaiting}</span>
                         </div>
                     )}
 
@@ -139,9 +178,9 @@ const Auditor = ({ onAuditSuccess }: AuditorProps) => {
                             <div className="w-16 h-16 rounded-full bg-[var(--color-error)]/10 flex items-center justify-center text-[var(--color-error)] mb-8 border border-[var(--color-error)]/20">
                                 <ShieldAlert size={28} />
                             </div>
-                            <span className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--color-error)] mb-2">Processing issue</span>
+                            <span className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[var(--color-error)] mb-2">{labels.issue}</span>
                             <p className="text-xs text-[var(--color-text-muted)] font-medium italic">{error}</p>
-                            <button onClick={runAudit} className="mt-10 text-[10px] font-semibold uppercase tracking-widest underline hover:text-[var(--color-primary)]">Retry audit</button>
+                            <button onClick={runAudit} className="mt-10 text-[9px] font-semibold uppercase tracking-widest underline hover:text-[var(--color-primary)]">{labels.retry}</button>
                         </div>
                     )}
 
@@ -167,25 +206,25 @@ const Auditor = ({ onAuditSuccess }: AuditorProps) => {
 
                     {report && !loading && (
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-14 relative z-10">
-                            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 border-b border-[var(--color-divider)] pb-8">
+                            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 border-b border-[var(--color-divider)] pb-6">
                                 <div className="flex flex-col gap-2">
                                      <div className="flex items-center gap-2">
                                         <div className="w-2 h-2 rounded-full bg-[var(--color-primary)]" />
-                                        <span className="text-[10px] font-semibold uppercase tracking-[0.4em] text-[var(--color-primary)]">Audit summary</span>
+                                        <span className="text-[10px] font-semibold uppercase tracking-[0.4em] text-[var(--color-primary)]">{labels.summary}</span>
                                      </div>
-                                     <h3 className="text-4xl font-serif font-bold text-[var(--color-text)] tracking-tight">{report.document_type}</h3>
+                                     <h3 className="text-3xl font-serif font-bold text-[var(--color-text)] tracking-tight">{report.document_type}</h3>
                                 </div>
                                 <div className="text-right">
-                                    <div className="text-[11px] font-mono font-semibold opacity-40 uppercase tracking-widest mb-1">Confidence</div>
-                                    <div className="text-4xl font-mono font-bold text-[var(--color-primary)]">{(report.confidence * 100).toFixed(0)}%</div>
+                                    <div className="text-[10px] font-mono font-semibold opacity-40 uppercase tracking-widest mb-1">{labels.confidence}</div>
+                                    <div className="text-3xl font-mono font-bold text-[var(--color-primary)]">{(report.confidence * 100).toFixed(0)}%</div>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-x-12 gap-y-10 border-b border-[var(--color-divider)] pb-12">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-8 border-b border-[var(--color-divider)] pb-10">
                                 {Object.entries(report.extracted_fields || {}).map(([key, val]) => (
                                     <div key={key} className="flex flex-col gap-2 group transition-all hover:translate-x-1">
                                         <span className="text-[11px] font-semibold uppercase tracking-[0.25em] text-[var(--color-text-muted)] opacity-70 group-hover:opacity-100 group-hover:text-[var(--color-primary)]">{key.replace('_', ' ')}</span>
-                                        <span className="text-base font-semibold text-[var(--color-text)]">{val as string}</span>
+                                        <span className="text-[15px] font-semibold text-[var(--color-text)]">{val as string}</span>
                                     </div>
                                 ))}
                             </div>
@@ -193,16 +232,16 @@ const Auditor = ({ onAuditSuccess }: AuditorProps) => {
                             <div className="flex flex-col gap-4">
                                 <div className="flex items-center gap-3">
                                    <ChevronRight size={14} className="text-[var(--color-warning)]" />
-                                   <span className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[var(--color-warning)]">Compliance notes</span>
+                                   <span className="text-[10px] font-semibold uppercase tracking-[0.3em] text-[var(--color-warning)]">{labels.notes}</span>
                                 </div>
-                                <p className="text-sm italic text-[var(--color-text-muted)] leading-relaxed font-semibold pl-6 border-l border-[var(--color-warning)]/20">
-                                    {report.summary || 'No critical anomalies detected in the input stream buffer.'}
+                                <p className={`text-[13px] italic text-[var(--color-text-muted)] leading-relaxed font-semibold ${isRtl ? 'pr-6 border-r' : 'pl-6 border-l'} border-[var(--color-warning)]/20`}>
+                                    {report.summary || labels.fallback}
                                 </p>
                             </div>
                         </motion.div>
                     )}
 
-                    <div className="mt-auto pt-16 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 opacity-40 text-[9px] font-mono font-semibold uppercase tracking-[0.2em]">
+                    <div className="mt-auto pt-12 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 opacity-40 text-[9px] font-mono font-semibold uppercase tracking-[0.2em]">
                         <div className="flex items-center gap-4">
                             <span className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-green-500" /> API ready</span>
                             <span className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-green-500" /> pipeline stable</span>

@@ -1,8 +1,8 @@
+@import url('https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700;800&family=Libre+Baskerville:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&family=JetBrains+Mono:wght@400;600&display=swap');
 
 /* ─── Design Tokens ──────────────────────────────────────── */
 :root {
@@ -81,7 +81,7 @@ html { scroll-behavior: smooth; }
 body {
   background-color: var(--bg);
   color: var(--text);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Urbanist', -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 14px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
@@ -91,7 +91,7 @@ body {
 }
 
 h1, h2, h3, h4 {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: 'Libre Baskerville', Georgia, serif;
   letter-spacing: -0.02em;
   line-height: 1.2;
 }
@@ -311,21 +311,21 @@ input[type="file"] { display: none; }
 
 /* ─── Meridian Professional Theme Overrides ─────────────── */
 :root {
-  --color-bg:             #f5f4f1;
+  --color-bg:             #f6f7fb;
   --color-surface:        #ffffff;
-  --color-surface-2:      #f1f2f4;
-  --color-surface-offset: #e7e9ed;
-  --color-divider:        #d9dde3;
-  --color-border:         #cfd4db;
+  --color-surface-2:      #eef1f6;
+  --color-surface-offset: #e6eaf2;
+  --color-divider:        #d7dee8;
+  --color-border:         #cdd5e2;
 
-  --color-text:           #141414;
-  --color-text-muted:     #4f5a66;
+  --color-text:           #101828;
+  --color-text-muted:     #4b5565;
   --color-text-faint:     #7b8794;
   --color-text-inverse:   #ffffff;
 
-  --color-primary:        #1f4b99;
-  --color-primary-hover:  #163a79;
-  --color-primary-highlight: rgba(31,75,153,0.08);
+  --color-primary:        #0f3d7a;
+  --color-primary-hover:  #0b2f60;
+  --color-primary-highlight: rgba(15,61,122,0.08);
 
   --color-warning:        #b45309;
   --color-error:          #b91c1c;
@@ -358,18 +358,33 @@ input[type="file"] { display: none; }
 }
 
 body {
-  background: radial-gradient(circle at top, rgba(31, 75, 153, 0.08), transparent 55%), var(--color-bg);
+  background:
+    radial-gradient(circle at top left, rgba(15, 61, 122, 0.12), transparent 45%),
+    radial-gradient(circle at 80% 10%, rgba(16, 24, 40, 0.08), transparent 40%),
+    var(--color-bg);
   color: var(--color-text);
-  font-family: 'Manrope', sans-serif;
+  font-family: 'Urbanist', sans-serif;
   font-weight: 500;
 }
 
 h1, h2, h3, .font-serif {
-  font-family: 'Playfair Display', serif;
+  font-family: 'Libre Baskerville', serif;
 }
 
 code, pre, .font-mono {
   font-family: 'JetBrains Mono', monospace;
+}
+
+.rtl {
+  direction: rtl;
+}
+
+.rtl .text-left {
+  text-align: right;
+}
+
+.rtl .text-right {
+  text-align: left;
 }
 
 .btn-accent {
