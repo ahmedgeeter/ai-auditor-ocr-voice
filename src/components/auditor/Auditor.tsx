@@ -133,7 +133,7 @@ const Auditor = ({ onAuditSuccess, language = 'en' }: AuditorProps) => {
                         {!preview ? (
                             <label className="absolute inset-0 flex flex-col items-center justify-center cursor-pointer group">
                                 <input type="file" className="hidden" onChange={handleFileUpload} accept="image/*,application/pdf" />
-                                <div className="w-16 h-16 rounded-2xl border border-[var(--color-divider)] flex items-center justify-center group-hover:border-[var(--color-primary)] transition-all bg-white shadow-[var(--shadow-sm)]">
+                                <div className="w-16 h-16 rounded-2xl border border-[var(--color-divider)] flex items-center justify-center group-hover:border-[var(--color-primary)] transition-all bg-[var(--color-surface)] shadow-[var(--shadow-sm)]">
                                     <FileText className="opacity-40 group-hover:opacity-100 group-hover:text-[var(--color-primary)] transition-all" size={24} />
                                 </div>
                                 <span className="mt-6 text-[10px] font-semibold uppercase tracking-[0.3em] opacity-50">{labels.upload}</span>
@@ -145,7 +145,7 @@ const Auditor = ({ onAuditSuccess, language = 'en' }: AuditorProps) => {
                                     <span className="text-[9px] font-mono font-semibold uppercase opacity-40 tracking-widest">{labels.preview}</span>
                                     <button onClick={() => setPreview(null)} className="text-[9px] font-semibold uppercase tracking-widest hover:text-[var(--color-error)] transition-colors text-[var(--color-text-muted)]">{labels.remove}</button>
                                 </div>
-                                <div className="flex-1 rounded-xl overflow-hidden border border-[var(--color-divider)] bg-white flex items-center justify-center relative">
+<div className="flex-1 rounded-xl overflow-hidden border border-[var(--color-divider)] bg-[var(--color-surface-2)] flex items-center justify-center relative">
                                     <img src={preview} className="max-w-full max-h-full object-contain" />
                                 </div>
                             </div>
