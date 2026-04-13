@@ -2,16 +2,15 @@
 
 **Meridian** is a production-grade, agency-level AI platform designed for corporate-scale document auditing and real-time vocal intelligence. Built with an editorial technical aesthetic, it leverages the cutting-edge **Meta Llama-4 Scout** engine and **Groq's LPL (Language Processing Units)** for near-instant neural responses.
 
-<img width="1320" height="725" alt="Screenshot 2026-04-02 031922" src="https://github.com/user-attachments/assets/05183e99-69f0-4ac5-8227-922c860f95fc" />
+<img width="1916" height="868" alt="Screenshot 2026-04-13 210744" src="https://github.com/user-attachments/assets/65da10b8-9682-4a93-a6a8-ebcd5f6186a2" />
 
-![sample_contract_meridian_1775090452453](https://github.com/user-attachments/assets/f8d3c851-41e5-40c6-971e-9053755ebc48)
+<img width="1919" height="867" alt="Screenshot 2026-04-13 210827" src="https://github.com/user-attachments/assets/9e6eda0d-7693-437c-bff1-cc8fb4ecd6e7" />
 
-<img width="1249" height="750" alt="image" src="https://github.com/user-attachments/assets/2e3c0bfb-adb6-4fbc-bbb3-29ae790b2f05" />
+<img width="1919" height="872" alt="Screenshot 2026-04-13 210850" src="https://github.com/user-attachments/assets/bc008f72-29bc-41eb-8544-18e71412114e" />
 
+<img width="1919" height="873" alt="Screenshot 2026-04-13 210857" src="https://github.com/user-attachments/assets/348bb3fd-2357-46b8-b02b-c4b41837004e" />
 
-<img width="943" height="730" alt="image" src="https://github.com/user-attachments/assets/beb8c2dd-ae44-4b14-82b1-f1a0a8659ab7" />
-
-![contract-for-legal-services-sample](https://github.com/user-attachments/assets/5af9f0ff-d87c-45ae-a35e-55597c9152d6)
+<img width="1128" height="829" alt="Screenshot 2026-04-13 210815" src="https://github.com/user-attachments/assets/cd006abe-6429-455d-8229-60ab2b3a8a1b" />
 
 
 
@@ -20,9 +19,12 @@
 ##  Key Value Propositions
 
 ### 1. **Autonomous Document Auditor (Multimodal OCR)**
+*   **Dynamic Field Extraction**: AI automatically detects document type (CV, Invoice, Contract, ID, Passport, etc.) and extracts ALL relevant fields without predefined templates.
+*   **Grouped Visual Interface**: Information organized into intuitive categories (Personal Info, Contact Details, Experience, Skills, etc.) with visual progress bars for confidence scores.
 *   **Precision Extraction**: Leverages Meta Llama-4 Vision to extract structured data from complex invoices, IDs, and legal contracts with human-level accuracy.
 *   **Neural Anomaly Detection**: Automatically identifies security threats, missing fields, or data inconsistencies in the input stream.
 *   **Smart Compression**: Integrated image optimization layer to handle high-resolution industrial documents without latency peaks.
+*   **Export Functionality**: One-click JSON export for integration with HR systems and databases.
 
 ### 2. **Neural Voice Hub**
 *   **Whisper-Powered Transcription**: Real-time vocal-to-text synchronization using deep neural buffers.
