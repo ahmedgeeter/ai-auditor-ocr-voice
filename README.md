@@ -2,6 +2,8 @@
 
 **Meridian** is a production-grade, agency-level AI platform designed for corporate-scale document auditing and real-time vocal intelligence. Built with an editorial technical aesthetic, it leverages the cutting-edge **Meta Llama-4 Scout** engine and **Groq's LPL (Language Processing Units)** for near-instant neural responses.
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Vercel-black?style=for-the-badge&logo=vercel)](https://ai-auditor-ocr-voice.vercel.app/)
+
 <img width="1916" height="868" alt="Screenshot 2026-04-13 210744" src="https://github.com/user-attachments/assets/65da10b8-9682-4a93-a6a8-ebcd5f6186a2" />
 
 <img width="1919" height="867" alt="Screenshot 2026-04-13 210827" src="https://github.com/user-attachments/assets/9e6eda0d-7693-437c-bff1-cc8fb4ecd6e7" />
