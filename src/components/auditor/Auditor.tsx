@@ -56,6 +56,8 @@ export default function Auditor({ isDark = false, onAuditSuccess, onExport }: Au
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'fields' | 'insights' | 'entities' | 'anomalies'>('fields');
+  const [uiLang, setUiLang] = useState<'en' | 'ar'>('en');
 
   // Load history on mount
   useEffect(() => {
@@ -136,11 +138,20 @@ export default function Auditor({ isDark = false, onAuditSuccess, onExport }: Au
         content = content.substring(firstBrace, lastBrace + 1);
       }
       
-      // Remove any markdown code block remnants
+      // Remove any markdown code block remnants and control characters
       content = content.replace(/```json\s*/gi, '').replace(/```\s*/gi, '');
+      content = content.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+      // Remove trailing commas before } or ] (invalid JSON from AI)
+      content = content.replace(/,(\s*[}\]])/g, '$1');
 
-      const parsed = JSON.parse(content);
+      let parsed: any;
+      try {
+        parsed = JSON.parse(content);
+      } catch (parseErr: any) {
+        throw new Error(`AI returned malformed JSON. Please try again. (${parseErr.message})`);
+      }
       setReport(parsed);
+      setActiveTab('fields');
       onAuditSuccess?.(parsed);
     } catch (err: any) {
       console.error('Audit error:', err);
@@ -170,376 +181,508 @@ export default function Auditor({ isDark = false, onAuditSuccess, onExport }: Au
     error: isDark ? 'text-red-400' : 'text-red-600',
   };
 
-  return (
-    <div className="grid lg:grid-cols-2 gap-6">
-      {/* Upload Section */}
-      <div className={`${theme.bg} rounded-xl shadow-sm border ${theme.border} overflow-hidden`}>
-        <div className={`p-4 border-b ${theme.borderSecondary} flex items-center justify-between`}>
-          <h2 className={`text-sm font-semibold ${theme.text}`}>Document Upload</h2>
-          {history.length > 0 && (
-            <button
-              onClick={clearHistory}
-              className={`text-xs ${theme.textMuted} hover:${theme.text} transition-colors`}
-            >
-              Clear History ({history.length})
-            </button>
-          )}
-        </div>
-        <div className="p-6">
-          {/* History */}
-          {history.length > 0 && !preview && (
-            <div className="mb-4">
-              <p className={`text-xs ${theme.textMuted} mb-2`}>Recent Analyses</p>
-              <div className="space-y-2 max-h-32 overflow-y-auto">
-                {history.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => setReport(item.report)}
-                    className={`w-full text-left p-2 rounded-lg ${theme.bgSecondary} hover:opacity-80 transition-opacity`}
-                  >
-                    <p className={`text-xs font-medium ${theme.text}`}>{item.report.document_type}</p>
-                    <p className={`text-xs ${theme.textMuted}`}>
-                      {new Date(item.date).toLocaleDateString()}
-                    </p>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+  const copy = {
+    en: {
+      workspaceTitle: 'AI Document Auditor',
+      uploadTitle: 'Document Upload',
+      clearHistory: 'Clear history',
+      recentAnalyses: 'Recent analyses',
+      dropFile: 'Drop file here or click to browse',
+      fileTypes: 'PDF · JPG · PNG · ID · Invoice · CV',
+      change: 'Change',
+      done: 'Done',
+      remove: 'Remove',
+      analyze: 'Analyze with AI',
+      analyzing: 'Analyzing...',
+      overviewTitle: 'Analysis Overview',
+      exportJson: 'Export JSON',
+      noAnalysisYet: 'No analysis yet',
+      noAnalysisHint: 'Upload a document and click Analyze with AI',
+      analysisFailed: 'Analysis failed',
+      analysisFailedHint: 'Please check your file and try again',
+      tryAgain: 'Try again',
+      fieldsRead: 'Fields Read',
+      fieldsReadSub: 'visible extracted values',
+      anomalies: 'Anomalies',
+      anomaliesClean: 'Clean',
+      anomaliesCleanSub: 'no issues found',
+      anomaliesFlaggedSub: 'needs review',
+      accuracy: 'AI Accuracy',
+      accuracySub: 'reading confidence',
+      aiSummary: 'AI Summary',
+      extractedFields: 'Extracted Fields',
+      insights: 'Insights & Tips',
+      recommendations: 'Recommendations',
+      entities: 'Entities',
+      noInsights: 'No insights available.',
+      noEntities: 'No entities detected.',
+      noAnomalies: 'No anomalies detected. Document looks clean.',
+      aiBusyTitle: 'AI is analyzing...',
+      aiBusySub: 'Detecting type · Extracting fields · Verifying',
+      verifiedMsg: 'This document appears authentic and all fields are consistent.',
+      suspiciousMsg: 'AI detected inconsistencies. Manual review is recommended.',
+      genericMsg: 'AI successfully read and extracted the document content.'
+    },
+    ar: {
+      workspaceTitle: 'مراجع المستندات بالذكاء الاصطناعي',
+      uploadTitle: 'رفع المستند',
+      clearHistory: 'مسح السجل',
+      recentAnalyses: 'التحليلات الأخيرة',
+      dropFile: 'اسحب الملف هنا أو اضغط للاختيار',
+      fileTypes: 'PDF · JPG · PNG · هوية · فاتورة · سيرة ذاتية',
+      change: 'تغيير',
+      done: 'تم',
+      remove: 'حذف',
+      analyze: 'تحليل بالذكاء الاصطناعي',
+      analyzing: 'جاري التحليل...',
+      overviewTitle: 'ملخص التحليل',
+      exportJson: 'تصدير JSON',
+      noAnalysisYet: 'لا يوجد تحليل بعد',
+      noAnalysisHint: 'ارفع مستنداً ثم اضغط تحليل بالذكاء الاصطناعي',
+      analysisFailed: 'فشل التحليل',
+      analysisFailedHint: 'يرجى مراجعة الملف ثم المحاولة مرة أخرى',
+      tryAgain: 'إعادة المحاولة',
+      fieldsRead: 'الحقول المقروءة',
+      fieldsReadSub: 'قيم مرئية مستخرجة',
+      anomalies: 'المشكلات',
+      anomaliesClean: 'سليم',
+      anomaliesCleanSub: 'لا توجد مشكلات',
+      anomaliesFlaggedSub: 'تحتاج مراجعة',
+      accuracy: 'دقة الذكاء الاصطناعي',
+      accuracySub: 'ثقة القراءة',
+      aiSummary: 'ملخص التحليل',
+      extractedFields: 'الحقول المستخرجة',
+      insights: 'الملاحظات والتوصيات',
+      recommendations: 'التوصيات',
+      entities: 'الكيانات',
+      noInsights: 'لا توجد ملاحظات متاحة.',
+      noEntities: 'لا توجد كيانات مكتشفة.',
+      noAnomalies: 'لا توجد مشكلات. المستند يبدو سليماً.',
+      aiBusyTitle: 'جاري التحليل بالذكاء الاصطناعي...',
+      aiBusySub: 'تحديد النوع · استخراج الحقول · التحقق',
+      verifiedMsg: 'يبدو أن المستند صحيح وكل الحقول متسقة.',
+      suspiciousMsg: 'تم رصد تعارضات. يوصى بالمراجعة اليدوية.',
+      genericMsg: 'تمت قراءة المستند واستخراج البيانات بنجاح.'
+    }
+  }[uiLang];
 
-          {!preview ? (
-            <label className={`flex flex-col items-center justify-center h-64 cursor-pointer ${theme.bgSecondary} hover:opacity-90 transition-all rounded-xl border-2 border-dashed ${theme.border}`}>
-              <input type="file" className="hidden" onChange={handleFileUpload} accept="image/*,application/pdf" />
-              <div className={`w-16 h-16 ${isDark ? 'bg-slate-600' : 'bg-slate-200'} rounded-full flex items-center justify-center mb-4`}>
-                <svg className={`w-8 h-8 ${theme.textMuted}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-              </div>
-              <p className={`text-sm font-medium ${theme.text}`}>Drop file or click to browse</p>
-              <p className={`text-xs ${theme.textMuted} mt-1`}>PDF, JPG, PNG, ID, Invoice, CV, etc.</p>
-            </label>
-          ) : (
-            <div className="space-y-4">
-              <div className={`relative aspect-[3/4] ${theme.bgSecondary} rounded-lg overflow-hidden`}>
-                <img src={preview} alt="Preview" className="w-full h-full object-contain" />
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => { setPreview(null); setFile(null); setReport(null); }}
-                  className={`flex-1 px-4 py-2.5 text-sm font-medium ${theme.textSecondary} ${theme.bgSecondary} rounded-lg hover:opacity-80 transition-colors`}
-                >
-                  Remove
-                </button>
-                {!report && (
-                  <button
-                    onClick={runAudit}
-                    disabled={loading}
-                    className={`flex-1 px-4 py-2.5 text-sm font-medium text-white ${theme.accentBg} rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors`}
-                  >
-                    {loading ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                        </svg>
-                        AI Analyzing...
-                      </span>
-                    ) : 'Analyze with AI'}
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
+  const getVisibleFieldEntries = (extractedFields: any): Array<{ key: string; fieldValue: string; category: string; isLong: boolean }> => {
+    if (!extractedFields || typeof extractedFields !== 'object') return [];
+    return Object.entries(extractedFields)
+      .map(([key, field]: [string, any]) => {
+        const rawValue = typeof field === 'object' && field !== null ? field.value : field;
+        const fieldValue = Array.isArray(rawValue)
+          ? rawValue.join(', ').trim()
+          : rawValue !== null && rawValue !== undefined
+          ? String(rawValue).trim()
+          : '';
+        const isEmpty = !fieldValue || ['n/a', 'null', 'undefined', 'none', ''].includes(fieldValue.toLowerCase());
+        if (isEmpty) return null;
+        const category = (typeof field === 'object' && field?.category) || 'general';
+        return { key, fieldValue, category, isLong: fieldValue.length > 60 };
+      })
+      .filter(Boolean) as Array<{ key: string; fieldValue: string; category: string; isLong: boolean }>;
+  };
+
+  const visibleFields = getVisibleFieldEntries(report?.extracted_fields);
+  const visibleFieldCount = visibleFields.length;
+  const insightsCount = (report?.document_specific_analysis?.insights?.length || 0) + (report?.document_specific_analysis?.recommendations?.length || 0);
+  const entitiesCount = report?.detected_entities?.length || 0;
+  const anomaliesCount = report?.anomalies?.length || 0;
+  const status = report?.document_specific_analysis?.verification_status;
+  const statusIsVerified = status === 'verified';
+  const statusIsSuspicious = status === 'suspicious';
+  const recentHistoryItems = history.reduce((acc: any[], item: any) => {
+    const docType = (item?.report?.document_type || 'Document').toLowerCase();
+    if (!acc.some((x) => (x?.report?.document_type || 'Document').toLowerCase() === docType)) {
+      acc.push(item);
+    }
+    return acc;
+  }, []).slice(0, 5);
+
+  return (
+    <div className="space-y-6 max-w-[1400px] mx-auto" dir={uiLang === 'ar' ? 'rtl' : 'ltr'}>
+      <div className={`rounded-2xl border ${theme.border} ${theme.bg} px-5 py-4 shadow-sm bg-gradient-to-br ${isDark ? 'from-slate-800 to-slate-900' : 'from-white to-slate-50'}`}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className={`text-xl font-semibold tracking-tight ${theme.text}`}>{copy.workspaceTitle}</h1>
+            <p className={`text-xs ${theme.textMuted} mt-1`}>{copy.fileTypes}</p>
+          </div>
+          <div className={`flex items-center rounded-lg border ${theme.border} overflow-hidden`}>
+            <button
+              onClick={() => setUiLang('en')}
+              className={`px-3 py-1.5 text-xs font-medium ${uiLang === 'en' ? 'bg-indigo-600 text-white' : `${theme.textMuted} ${theme.bg}`}`}
+            >
+              EN
+            </button>
+            <button
+              onClick={() => setUiLang('ar')}
+              className={`px-3 py-1.5 text-xs font-medium ${uiLang === 'ar' ? 'bg-indigo-600 text-white' : `${theme.textMuted} ${theme.bg}`}`}
+            >
+              AR
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Results Section */}
-      <div className={`${theme.bg} rounded-xl shadow-sm border ${theme.border} overflow-hidden`}>
-        <div className={`p-4 border-b ${theme.borderSecondary} flex items-center justify-between`}>
-          <h2 className={`text-sm font-semibold ${theme.text}`}>AI Analysis Results</h2>
-          {report && onExport && (
-            <button
-              onClick={() => onExport(report)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium ${theme.accentBg} text-white rounded-lg hover:opacity-90 transition-opacity`}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              Export JSON
-            </button>
-          )}
-        </div>
-        <div className="p-6 max-h-[600px] overflow-y-auto">
-          {!report && !loading && !error && (
-            <div className={`h-80 flex flex-col items-center justify-center ${theme.textMuted}`}>
-              <div className={`w-12 h-12 ${theme.bgSecondary} rounded-full flex items-center justify-center mb-3`}>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              <p className="text-sm">Upload any document for intelligent analysis</p>
-              <p className={`text-xs mt-2 opacity-70`}>The AI will auto-detect document type and extract all relevant fields</p>
+      <div className="grid xl:grid-cols-12 gap-5 items-start">
+        <div className="xl:col-span-7 space-y-5">
+          <div className={`${theme.bg} rounded-2xl border ${theme.border} shadow-sm overflow-hidden`}> 
+            <div className={`px-5 py-3.5 border-b ${theme.borderSecondary} flex items-center justify-between`}>
+              <h2 className={`text-sm font-semibold ${theme.text}`}>{copy.uploadTitle}</h2>
+              {history.length > 0 && (
+                <button onClick={clearHistory} className={`text-xs ${theme.textMuted} hover:text-red-500 transition-colors`}>
+                  {copy.clearHistory}
+                </button>
+              )}
             </div>
-          )}
 
-          {loading && (
-            <div className={`h-80 flex flex-col items-center justify-center ${theme.textSecondary}`}>
-              <div className="w-12 h-12 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mb-4"></div>
-              <p className="text-sm">AI is analyzing document...</p>
-              <p className={`text-xs mt-2 ${theme.textMuted}`}>Detecting type, extracting fields, verifying content</p>
-            </div>
-          )}
-
-          {error && (
-            <div className="h-80 flex flex-col items-center justify-center text-center">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-3">
-                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <p className={`text-sm ${theme.error} mb-3`}>{error}</p>
-              <button onClick={runAudit} className={`text-sm ${theme.accent} hover:opacity-80 font-medium`}>
-                Try again
-              </button>
-            </div>
-          )}
-
-          {report && (
-            <div className="space-y-6">
-              {/* Document Type & Confidence */}
-              <div className={`flex items-center justify-between pb-4 border-b ${theme.borderSecondary}`}>
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${theme.bgSecondary} ${theme.accent}`}>
-                    {getDocumentIcon(report.document_type)}
+            <div className="p-5 space-y-4">
+              {history.length > 0 && !preview && (
+                <div>
+                  <p className={`text-xs ${theme.textMuted} mb-2`}>{copy.recentAnalyses}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {recentHistoryItems.map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          setReport(item.report);
+                          setActiveTab('fields');
+                          onAuditSuccess?.(item.report);
+                        }}
+                        className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                          isDark ? 'border-slate-600 text-slate-300 hover:border-indigo-500' : 'border-slate-200 text-slate-600 hover:border-indigo-300'
+                        }`}
+                      >
+                        {item.report.document_type}
+                      </button>
+                    ))}
                   </div>
-                  <div>
-                    <p className={`text-xs font-medium ${theme.textMuted} uppercase tracking-wide`}>Detected Type</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <h3 className={`text-lg font-semibold ${theme.text}`}>{report.document_type}</h3>
-                      {report.document_subtype && (
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${theme.bgSecondary} ${theme.textSecondary}`}>
-                          {report.document_subtype}
-                        </span>
+                </div>
+              )}
+
+              {!preview ? (
+                <label className={`block cursor-pointer rounded-xl border-2 border-dashed transition-all ${
+                  isDark ? 'border-slate-600 bg-slate-800/50 hover:border-indigo-500' : 'border-slate-200 bg-slate-50 hover:border-indigo-400'
+                }`}>
+                  <input type="file" className="hidden" onChange={handleFileUpload} accept="image/*,application/pdf" />
+                  <div className="h-72 flex flex-col items-center justify-center px-6 text-center">
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-3 ${isDark ? 'bg-slate-700' : 'bg-white'} shadow-sm`}>
+                      <svg className="w-7 h-7 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <p className={`text-sm font-semibold ${theme.text}`}>{copy.dropFile}</p>
+                    <p className={`text-xs ${theme.textMuted} mt-2`}>{copy.fileTypes}</p>
+                  </div>
+                </label>
+              ) : (
+                <div className="grid md:grid-cols-12 gap-4 items-start">
+                  <div className="md:col-span-8">
+                    <div className={`relative rounded-xl overflow-hidden border ${theme.border} ${isDark ? 'bg-slate-900' : 'bg-slate-50'}`}>
+                      <img src={preview} alt="Preview" className="w-full h-[300px] object-contain" />
+                      {loading && (
+                        <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-2">
+                          <svg className="animate-spin h-8 w-8 text-white" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                          <p className="text-white text-xs font-medium">{copy.analyzing}</p>
+                        </div>
                       )}
                     </div>
                   </div>
-                </div>
-                <div className="text-right">
-                  <p className={`text-xs font-medium ${theme.textMuted} uppercase tracking-wide`}>AI Confidence</p>
-                  <p className={`text-2xl font-bold ${(report.confidence || 0) > 0.8 ? theme.success : theme.warning} mt-0.5`}>
-                    {((report.confidence || 0) * 100).toFixed(0)}%
-                  </p>
-                </div>
-              </div>
 
-              {/* Verification Status */}
-              {report.document_specific_analysis?.verification_status && (
-                <div className={`p-3 rounded-lg ${
-                  report.document_specific_analysis.verification_status === 'verified' 
-                    ? isDark ? 'bg-green-900/30 text-green-400' : 'bg-green-50 text-green-700'
-                    : report.document_specific_analysis.verification_status === 'suspicious'
-                    ? isDark ? 'bg-red-900/30 text-red-400' : 'bg-red-50 text-red-700'
-                    : theme.bgSecondary
-                }`}>
-                  <div className="flex items-center gap-2">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      {report.document_specific_analysis.verification_status === 'verified' ? (
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      ) : report.document_specific_analysis.verification_status === 'suspicious' ? (
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      ) : (
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      )}
-                    </svg>
-                    <span className="text-sm font-medium capitalize">
-                      Status: {report.document_specific_analysis.verification_status}
-                    </span>
+                  <div className="md:col-span-4 space-y-3">
+                    <div className={`rounded-xl border ${theme.border} p-3 ${isDark ? 'bg-slate-800/50' : 'bg-slate-50'}`}>
+                      <p className={`text-xs ${theme.textMuted} mb-1`}>File</p>
+                      <p className={`text-sm font-semibold ${theme.text} break-words`}>{file?.name}</p>
+                      <p className={`text-xs ${theme.textMuted} mt-1`}>{file ? `${(file.size / 1024).toFixed(0)} KB` : ''}</p>
+                    </div>
+
+                    <label className="block">
+                      <input type="file" className="hidden" onChange={handleFileUpload} accept="image/*,application/pdf" />
+                      <span className={`w-full inline-flex justify-center px-3 py-2 text-sm font-medium rounded-lg border cursor-pointer ${theme.border} ${theme.textSecondary} ${isDark ? 'hover:bg-slate-700' : 'hover:bg-slate-100'}`}>
+                        {copy.change}
+                      </span>
+                    </label>
+
+                    <button
+                      onClick={() => { setPreview(null); setFile(null); setReport(null); setError(null); }}
+                      className={`w-full px-3 py-2 text-sm font-medium rounded-lg border ${theme.border} ${theme.textSecondary} ${isDark ? 'hover:bg-slate-700' : 'hover:bg-slate-100'}`}
+                    >
+                      {copy.remove}
+                    </button>
+
+                    {!report && (
+                      <button
+                        onClick={runAudit}
+                        disabled={loading}
+                        className="w-full px-3 py-2 text-sm font-semibold rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {loading ? copy.analyzing : copy.analyze}
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
 
-              {/* Extracted Fields - Dynamic & Grouped */}
-              {report.extracted_fields && typeof report.extracted_fields === 'object' && Object.keys(report.extracted_fields).length > 0 && (
-                <div>
-                  <p className={`text-xs font-medium ${theme.textMuted} uppercase tracking-wide mb-4`}>
-                    Extracted Information
-                  </p>
-                  
-                  {/* Group fields by category */}
-                  {(() => {
-                    const fields = Object.entries(report.extracted_fields);
-                    const grouped = fields.reduce((acc: any, [key, field]: [string, any]) => {
-                      const category = (typeof field === 'object' && field?.category) || 'general';
-                      if (!acc[category]) acc[category] = [];
-                      acc[category].push({ key, field });
-                      return acc;
-                    }, {});
-                    
-                    const categoryLabels: Record<string, string> = {
-                      personal_info: 'Personal Information',
-                      contact_info: 'Contact Details',
-                      location: 'Location',
-                      social_media: 'Social Profiles',
-                      experience: 'Experience',
-                      education: 'Education',
-                      technical_skills: 'Technical Skills',
-                      summary: 'Summary',
-                      portfolio: 'Portfolio',
-                      general: 'General Information'
-                    };
-                    
-                    const categoryOrder = ['personal_info', 'contact_info', 'location', 'social_media', 'experience', 'education', 'technical_skills', 'summary', 'portfolio', 'general'];
-                    
-                    return categoryOrder
-                      .filter(cat => grouped[cat] && grouped[cat].length > 0)
-                      .map(category => (
-                        <div key={category} className={`mb-4 p-3 rounded-lg ${isDark ? 'bg-slate-700/50' : 'bg-slate-50'}`}>
-                          <p className={`text-xs font-semibold ${theme.accent} uppercase tracking-wide mb-3 flex items-center gap-2`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${isDark ? 'bg-indigo-400' : 'bg-indigo-500'}`}></span>
-                            {categoryLabels[category] || category.replace(/_/g, ' ')}
-                          </p>
-                          <div className="space-y-3">
-                            {grouped[category].map(({ key, field }: { key: string, field: any }) => {
-                              const fieldValue = typeof field === 'object' && field !== null ? (field.value || '') : String(field || '');
-                              const fieldConfidence = typeof field === 'object' && field !== null ? (field.confidence || 0.5) : 0.5;
-                              
-                              return (
-                                <div key={key} className="group">
-                                  <div className="flex items-center justify-between mb-1">
-                                    <span className={`text-xs ${theme.textMuted} capitalize`}>
-                                      {key.replace(/_/g, ' ')}
-                                    </span>
-                                    <div className="flex items-center gap-2">
-                                      <div className={`w-16 h-1.5 rounded-full ${isDark ? 'bg-slate-600' : 'bg-slate-200'} overflow-hidden`}>
-                                        <div 
-                                          className={`h-full rounded-full transition-all duration-500 ${
-                                            fieldConfidence > 0.8 ? 'bg-green-500' : 
-                                            fieldConfidence > 0.5 ? 'bg-amber-500' : 'bg-red-500'
-                                          }`}
-                                          style={{ width: `${fieldConfidence * 100}%` }}
-                                        />
-                                      </div>
-                                      <span className={`text-xs font-medium ${
-                                        fieldConfidence > 0.8 ? theme.success : 
-                                        fieldConfidence > 0.5 ? theme.warning : theme.error
-                                      }`}>
-                                        {(fieldConfidence * 100).toFixed(0)}%
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <p className={`text-sm ${theme.text} font-medium break-words leading-relaxed`}>
-                                    {fieldValue}
-                                  </p>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ));
-                  })()}
+              {error && (
+                <div className={`flex items-start gap-2.5 p-3 rounded-xl border ${isDark ? 'bg-red-900/20 border-red-800 text-red-400' : 'bg-red-50 border-red-100 text-red-600'}`}>
+                  <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <p className="text-xs flex-1">{error}</p>
+                  <button onClick={runAudit} className="text-xs font-bold underline underline-offset-2 shrink-0">{copy.tryAgain}</button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="xl:col-span-5">
+          <div className={`${theme.bg} rounded-2xl border ${theme.border} shadow-sm overflow-hidden`}>
+            <div className={`px-5 py-3.5 border-b ${theme.borderSecondary} flex items-center justify-between`}>
+              <h2 className={`text-sm font-semibold ${theme.text}`}>{copy.overviewTitle}</h2>
+              {report && onExport && (
+                <button
+                  onClick={() => onExport(report)}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${isDark ? 'bg-indigo-900/40 text-indigo-300' : 'bg-indigo-50 text-indigo-600'}`}
+                >
+                  {copy.exportJson}
+                </button>
+              )}
+            </div>
+
+            <div className="p-5">
+              {!report && !loading && !error && (
+                <div className={`h-[300px] rounded-xl border ${theme.border} flex flex-col items-center justify-center text-center px-6 ${isDark ? 'bg-slate-800/40' : 'bg-slate-50'}`}>
+                  <p className={`text-sm font-semibold ${theme.text}`}>{copy.noAnalysisYet}</p>
+                  <p className={`text-xs mt-2 ${theme.textMuted}`}>{copy.noAnalysisHint}</p>
                 </div>
               )}
 
-              {/* Detected Entities */}
-              {report.detected_entities && report.detected_entities.length > 0 && (
-                <div className={`pt-4 border-t ${theme.borderSecondary}`}>
-                  <p className={`text-xs font-medium ${theme.textMuted} uppercase tracking-wide mb-2`}>
-                    Key Entities Detected
-                  </p>
+              {loading && (
+                <div className="h-[300px] flex flex-col items-center justify-center gap-3">
+                  <div className="w-14 h-14 rounded-full border-4 border-indigo-200 border-t-indigo-600 animate-spin" />
+                  <p className={`text-sm font-semibold ${theme.text}`}>{copy.aiBusyTitle}</p>
+                  <p className={`text-xs ${theme.textMuted}`}>{copy.aiBusySub}</p>
+                </div>
+              )}
+
+              {error && !loading && (
+                <div className="h-[300px] flex flex-col items-center justify-center text-center gap-3">
+                  <p className="text-sm font-semibold text-red-600">{copy.analysisFailed}</p>
+                  <p className={`text-xs ${theme.textMuted}`}>{copy.analysisFailedHint}</p>
+                  <button onClick={runAudit} className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700">
+                    {copy.tryAgain}
+                  </button>
+                </div>
+              )}
+
+              {report && !loading && (
+                <div className="space-y-4">
+                  <div className={`p-4 rounded-xl border ${statusIsVerified ? (isDark ? 'bg-green-900/20 border-green-700/40' : 'bg-green-50 border-green-200') : statusIsSuspicious ? (isDark ? 'bg-red-900/20 border-red-700/40' : 'bg-red-50 border-red-200') : (isDark ? 'bg-indigo-900/20 border-indigo-700/40' : 'bg-indigo-50 border-indigo-200')}`}>
+                    <div className="flex items-start gap-3">
+                      <div className={`${theme.accent}`}>{getDocumentIcon(report.document_type)}</div>
+                      <div className="min-w-0">
+                        <p className={`text-base font-semibold tracking-tight ${theme.text}`}>{report.document_type}</p>
+                        {report.document_subtype && <p className={`text-xs ${theme.textMuted} mt-0.5`}>{report.document_subtype}</p>}
+                        <p className={`text-xs mt-2 ${theme.textSecondary}`}>{statusIsVerified ? copy.verifiedMsg : statusIsSuspicious ? copy.suspiciousMsg : copy.genericMsg}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid sm:grid-cols-3 gap-3">
+                    <div className={`rounded-xl p-3 border ${theme.border} ${isDark ? 'bg-slate-800/40' : 'bg-slate-50'}`}>
+                      <p className={`text-xs uppercase tracking-wide ${theme.textMuted}`}>{copy.fieldsRead}</p>
+                      <p className={`text-xl font-bold ${theme.text} mt-1`}>{visibleFieldCount}</p>
+                    </div>
+                    <div className={`rounded-xl p-3 border ${theme.border} ${isDark ? 'bg-slate-800/40' : 'bg-slate-50'}`}>
+                      <p className={`text-xs uppercase tracking-wide ${theme.textMuted}`}>{copy.anomalies}</p>
+                      <p className={`text-xl font-bold mt-1 ${anomaliesCount === 0 ? theme.success : theme.error}`}>{anomaliesCount === 0 ? copy.anomaliesClean : anomaliesCount}</p>
+                    </div>
+                    <div className={`rounded-xl p-3 border ${theme.border} ${isDark ? 'bg-slate-800/40' : 'bg-slate-50'}`}>
+                      <p className={`text-xs uppercase tracking-wide ${theme.textMuted}`}>{copy.entities}</p>
+                      <p className={`text-xl font-bold mt-1 ${theme.text}`}>{entitiesCount}</p>
+                    </div>
+                  </div>
+
+                  {report.summary && (
+                    <div className={`rounded-xl p-3.5 border ${theme.border} ${isDark ? 'bg-slate-800/40' : 'bg-white'}`}>
+                      <p className={`text-xs font-semibold uppercase tracking-wide mb-1.5 ${theme.textMuted}`}>{copy.aiSummary}</p>
+                      <p className={`text-sm ${theme.textSecondary} leading-relaxed`}>{report.summary}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {report && (
+        <div className={`${theme.bg} rounded-2xl shadow-sm border ${theme.border} overflow-hidden`}>
+          <div className={`p-3 border-b ${theme.borderSecondary}`}>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: 'fields', label: copy.extractedFields, count: visibleFieldCount },
+                { key: 'insights', label: copy.insights, count: insightsCount },
+                { key: 'entities', label: copy.entities, count: entitiesCount },
+                { key: 'anomalies', label: copy.anomalies, count: anomaliesCount },
+              ].map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key as any)}
+                  className={`px-3 py-2 text-xs font-semibold rounded-lg border transition-all ${
+                    activeTab === tab.key
+                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm shadow-indigo-200/40'
+                      : isDark
+                      ? 'border-slate-600 text-slate-300 hover:border-indigo-500 hover:text-white'
+                      : 'border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600'
+                  }`}
+                >
+                  {tab.label} ({tab.count})
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="p-5">
+            {activeTab === 'fields' && (
+              (() => {
+                const grouped = visibleFields.reduce((acc: any, item: any) => {
+                  if (!acc[item.category]) acc[item.category] = [];
+                  acc[item.category].push(item);
+                  return acc;
+                }, {});
+
+                const categoryLabels: Record<string, string> = {
+                  personal_info: 'Personal Information',
+                  contact_info: 'Contact Details',
+                  location: 'Location',
+                  social_media: 'Social Profiles',
+                  experience: 'Experience',
+                  education: 'Education',
+                  technical_skills: 'Technical Skills',
+                  skills: 'Skills',
+                  summary: 'Summary',
+                  portfolio: 'Portfolio',
+                  projects: 'Projects',
+                  certifications: 'Certifications',
+                  languages: 'Languages',
+                  general: 'General Information'
+                };
+
+                const categoryOrder = ['personal_info', 'contact_info', 'location', 'social_media', 'experience', 'education', 'technical_skills', 'skills', 'summary', 'portfolio', 'projects', 'certifications', 'languages', 'general'];
+                const knownCats = categoryOrder.filter((cat) => grouped[cat]?.length > 0);
+                const unknownCats = Object.keys(grouped).filter((cat) => !categoryOrder.includes(cat));
+                const activeCats = [...knownCats, ...unknownCats];
+
+                return (
+                  <div className="columns-1 md:columns-2 xl:columns-3 gap-4 [column-fill:_balance]">
+                    {activeCats.map((category) => {
+                      const catFields = grouped[category] || [];
+                      if (catFields.length === 0) return null;
+                      return (
+                        <article
+                          key={category}
+                          className={`mb-4 break-inside-avoid rounded-xl border overflow-hidden ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} shadow-sm hover:shadow-md transition-shadow`}
+                        >
+                          <header className={`px-4 py-2.5 border-b ${isDark ? 'bg-slate-700/60 border-slate-600' : 'bg-slate-50 border-slate-100'}`}>
+                            <p className={`text-xs font-bold uppercase tracking-widest ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}>
+                              {categoryLabels[category] || category.replace(/_/g, ' ')}
+                            </p>
+                          </header>
+                          <div className={`divide-y ${isDark ? 'divide-slate-700' : 'divide-slate-100'}`}>
+                            {catFields.map((f: any) => (
+                              <div key={f.key} className="px-4 py-3">
+                                <p className={`text-[11px] font-medium uppercase tracking-wide ${theme.textMuted}`}>{f.key.replace(/_/g, ' ')}</p>
+                                <p className={`text-sm font-semibold mt-1 leading-relaxed ${theme.text}`}>{f.fieldValue}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                );
+              })()
+            )}
+
+            {activeTab === 'insights' && (
+              <div className="grid md:grid-cols-2 gap-5">
+                <div className={`rounded-xl border ${theme.border} p-4 ${isDark ? 'bg-slate-800/40' : 'bg-slate-50'}`}>
+                  <p className={`text-xs font-semibold uppercase tracking-wide mb-3 ${theme.accent}`}>{copy.insights}</p>
+                  {report.document_specific_analysis?.insights?.length > 0 ? (
+                    <ul className="space-y-2.5">
+                      {report.document_specific_analysis.insights.map((insight: string, i: number) => (
+                        <li key={i} className={`text-sm leading-relaxed ${theme.textSecondary}`}>{insight}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className={`text-sm ${theme.textMuted}`}>{copy.noInsights}</p>
+                  )}
+                </div>
+
+                <div className={`rounded-xl border ${theme.border} p-4 ${isDark ? 'bg-slate-800/40' : 'bg-slate-50'}`}>
+                  <p className={`text-xs font-semibold uppercase tracking-wide mb-3 ${theme.success}`}>{copy.recommendations}</p>
+                  {report.document_specific_analysis?.recommendations?.length > 0 ? (
+                    <ul className="space-y-2.5">
+                      {report.document_specific_analysis.recommendations.map((rec: string, i: number) => (
+                        <li key={i} className={`text-sm leading-relaxed ${theme.textSecondary}`}>{rec}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className={`text-sm ${theme.textMuted}`}>{copy.noInsights}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'entities' && (
+              <div>
+                {report.detected_entities?.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {report.detected_entities.map((entity: string, i: number) => (
-                      <span 
-                        key={i} 
-                        className={`px-2 py-1 text-xs rounded-md ${theme.bgSecondary} ${theme.textSecondary}`}
-                      >
+                      <span key={i} className={`px-3 py-1.5 text-xs rounded-lg font-medium border ${theme.border} ${isDark ? 'bg-slate-800 text-slate-200' : 'bg-slate-50 text-slate-700'}`}>
                         {entity}
                       </span>
                     ))}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <p className={`text-sm ${theme.textMuted}`}>{copy.noEntities}</p>
+                )}
+              </div>
+            )}
 
-              {/* AI Insights */}
-              {report.document_specific_analysis?.insights && (
-                <div className={`pt-4 border-t ${theme.borderSecondary}`}>
-                  <p className={`text-xs font-medium ${theme.accent} uppercase tracking-wide mb-2`}>
-                    AI Insights
-                  </p>
-                  <ul className="space-y-1">
-                    {report.document_specific_analysis.insights.map((insight: string, i: number) => (
-                      <li key={i} className={`text-sm ${theme.textSecondary} flex items-start gap-2`}>
-                        <span className={`${theme.accent} mt-1`}>•</span>
-                        {insight}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Recommendations */}
-              {report.document_specific_analysis?.recommendations && (
-                <div className={`pt-4 border-t ${theme.borderSecondary}`}>
-                  <p className={`text-xs font-medium ${theme.success} uppercase tracking-wide mb-2`}>
-                    AI Recommendations
-                  </p>
-                  <ul className="space-y-1">
-                    {report.document_specific_analysis.recommendations.map((rec: string, i: number) => (
-                      <li key={i} className={`text-sm ${theme.textSecondary} flex items-start gap-2`}>
-                        <svg className={`w-4 h-4 ${theme.success} mt-0.5 shrink-0`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        {rec}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Anomalies */}
-              {report.anomalies && report.anomalies.length > 0 && (
-                <div className={`pt-4 border-t ${theme.borderSecondary}`}>
-                  <p className={`text-xs font-medium ${theme.error} uppercase tracking-wide mb-2`}>
-                    Anomalies Detected
-                  </p>
-                  <div className="space-y-2">
+            {activeTab === 'anomalies' && (
+              <div>
+                {report.anomalies?.length > 0 ? (
+                  <div className="grid md:grid-cols-2 gap-3">
                     {report.anomalies.map((anomaly: any, i: number) => (
-                      <div 
-                        key={i} 
-                        className={`p-2 rounded-lg ${
-                          anomaly.severity === 'high' 
-                            ? isDark ? 'bg-red-900/30' : 'bg-red-50'
-                            : anomaly.severity === 'medium'
-                            ? isDark ? 'bg-amber-900/30' : 'bg-amber-50'
-                            : theme.bgSecondary
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs font-bold uppercase ${
-                            anomaly.severity === 'high' ? theme.error :
-                            anomaly.severity === 'medium' ? theme.warning :
-                            theme.textMuted
-                          }`}>
-                            {anomaly.severity}
-                          </span>
-                          <span className={`text-sm ${theme.text}`}>{anomaly.description}</span>
-                        </div>
+                      <div key={i} className={`p-3 rounded-lg border ${
+                        anomaly.severity === 'high'
+                          ? isDark ? 'bg-red-900/20 border-red-800/40' : 'bg-red-50 border-red-100'
+                          : anomaly.severity === 'medium'
+                          ? isDark ? 'bg-amber-900/20 border-amber-800/40' : 'bg-amber-50 border-amber-100'
+                          : `${theme.bgSecondary} ${theme.border}`
+                      }`}>
+                        <p className={`text-xs uppercase font-semibold mb-1 ${anomaly.severity === 'high' ? theme.error : anomaly.severity === 'medium' ? theme.warning : theme.textMuted}`}>
+                          {anomaly.severity}
+                        </p>
+                        <p className={`text-sm ${theme.textSecondary}`}>{anomaly.description}</p>
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
-
-              {/* Summary */}
-              {report.summary && (
-                <div className={`pt-4 border-t ${theme.borderSecondary}`}>
-                  <p className={`text-xs font-medium ${theme.textMuted} uppercase tracking-wide mb-2`}>Summary</p>
-                  <p className={`text-sm ${theme.textSecondary} leading-relaxed italic`}>{report.summary}</p>
-                </div>
-              )}
-            </div>
-          )}
+                ) : (
+                  <p className={`text-sm ${theme.textMuted}`}>{copy.noAnomalies}</p>
+                )}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

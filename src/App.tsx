@@ -21,6 +21,21 @@ function App() {
     }
   }, [isDark]);
 
+  useEffect(() => {
+    try {
+      const history = JSON.parse(localStorage.getItem('auditHistory') || '[]');
+      const latestReport = history?.[0]?.report;
+      if (latestReport) {
+        setLastAuditContext(JSON.stringify(latestReport));
+        setAuditDone(true);
+      }
+    } catch {
+      // ignore corrupted local storage
+    }
+  }, []);
+
+  const canUseVoice = auditDone && Boolean(lastAuditContext);
+
   const exportResults = (report: any) => {
     const data = JSON.stringify(report, null, 2);
     const blob = new Blob([data], { type: 'application/json' });
@@ -78,11 +93,11 @@ function App() {
               </button>
               <button
                 onClick={() => setActiveTab('voice')}
-                disabled={!auditDone}
+                disabled={!canUseVoice}
                 className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
                   activeTab === 'voice'
                     ? isDark ? 'bg-slate-600 text-white shadow-sm' : 'bg-white text-slate-900 shadow-sm'
-                    : auditDone
+                    : canUseVoice
                     ? isDark ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-900'
                     : 'text-slate-400 cursor-not-allowed'
                 }`}
@@ -104,14 +119,18 @@ function App() {
               setAuditDone(true);
               // Auto-save to localStorage
               const history = JSON.parse(localStorage.getItem('auditHistory') || '[]');
-              history.unshift({ id: Date.now(), date: new Date().toISOString(), report });
-              localStorage.setItem('auditHistory', JSON.stringify(history.slice(0, 10)));
+              const reportFingerprint = JSON.stringify(report);
+              const alreadyFirst = history[0]?.report && JSON.stringify(history[0].report) === reportFingerprint;
+              if (!alreadyFirst) {
+                history.unshift({ id: Date.now(), date: new Date().toISOString(), report });
+                localStorage.setItem('auditHistory', JSON.stringify(history.slice(0, 10)));
+              }
             }}
             onExport={exportResults}
           />
         )}
 
-        {activeTab === 'voice' && auditDone && (
+        {activeTab === 'voice' && canUseVoice && (
           <Voice
             context={lastAuditContext}
             isDark={isDark}
@@ -121,7 +140,7 @@ function App() {
           />
         )}
 
-        {activeTab === 'voice' && !auditDone && (
+        {activeTab === 'voice' && !canUseVoice && (
           <div className={`text-center py-20 ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
             <svg className="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />

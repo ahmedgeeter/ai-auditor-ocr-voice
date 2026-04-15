@@ -42,22 +42,47 @@ RULES:
 - If unclear, use best guess with lower confidence
 - Extract EVERYTHING visible in the image`;
 
-// Helper to extract JSON from AI response
+// Helper to extract and repair JSON from AI response
 const extractJSON = (content: string): string => {
   // Remove markdown code blocks
   let cleaned = content.replace(/```json\s*/gi, '').replace(/```\s*/gi, '');
-  
+
+  // Remove control characters that break JSON.parse
+  cleaned = cleaned.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+
   // Find the first '{' and last '}'
   const firstBrace = cleaned.indexOf('{');
   const lastBrace = cleaned.lastIndexOf('}');
-  
+
   if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
     cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+  } else if (firstBrace !== -1) {
+    // JSON appears truncated — take from first '{' to end and attempt repair
+    cleaned = cleaned.substring(firstBrace);
+    // Close any unclosed string by appending a quote if needed
+    const quoteCount = (cleaned.match(/(?<!\\)"/g) || []).length;
+    if (quoteCount % 2 !== 0) cleaned += '"';
+    // Count and close unclosed brackets/braces
+    let openBraces = 0;
+    let openBrackets = 0;
+    let inString = false;
+    for (let i = 0; i < cleaned.length; i++) {
+      const c = cleaned[i];
+      if (c === '"' && (i === 0 || cleaned[i - 1] !== '\\')) inString = !inString;
+      if (!inString) {
+        if (c === '{') openBraces++;
+        else if (c === '}') openBraces--;
+        else if (c === '[') openBrackets++;
+        else if (c === ']') openBrackets--;
+      }
+    }
+    // Remove trailing comma before closing
+    cleaned = cleaned.replace(/,\s*$/, '');
+    for (let i = 0; i < openBrackets; i++) cleaned += ']';
+    for (let i = 0; i < openBraces; i++) cleaned += '}';
   }
-  
-  // Remove any text before first '{' and after last '}'
+
   cleaned = cleaned.trim();
-  
   return cleaned;
 };
 
@@ -74,7 +99,7 @@ export async function auditDocument(imageBase64: string): Promise<{ content: str
           { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imageBase64}` } }
         ]
       }],
-      max_tokens: 2048,
+      max_tokens: 4096,
     });
     
     const rawContent = response.choices[0].message.content || '{}';
@@ -89,14 +114,17 @@ export async function auditDocument(imageBase64: string): Promise<{ content: str
   }
 }
 
-export async function transcribeAudio(audioBlob: Blob): Promise<string> {
+export async function transcribeAudio(audioBlob: Blob, lang: 'en' | 'ar' = 'en'): Promise<string> {
   ensureApiKey();
   const file = new File([audioBlob], 'audio.webm', { type: 'audio/webm' });
   try {
-    const transcription = await client.audio.transcriptions.create({
+    const transcriptionParams: any = {
       file,
       model: 'whisper-large-v3',
-    });
+      language: lang === 'ar' ? 'ar' : 'en',
+    };
+
+    const transcription = await client.audio.transcriptions.create(transcriptionParams);
     return transcription.text;
   } catch (err: any) {
     throw new Error(extractGroqError(err));
@@ -106,12 +134,17 @@ export async function transcribeAudio(audioBlob: Blob): Promise<string> {
 export async function getIntelligentResponse(
   userText: string,
   context?: string,
-  history?: { role: 'user' | 'assistant'; content: string }[]
+  history?: { role: 'user' | 'assistant'; content: string }[],
+  lang: 'en' | 'ar' = 'en'
 ): Promise<string> {
   ensureApiKey();
+  const languageDirective = lang === 'ar'
+    ? 'Respond ONLY in Arabic. Use clear professional Arabic, no English unless it is a document field that must stay as-is.'
+    : 'Respond ONLY in English.';
+
   const sysPrompt = context
-    ? `You are Meridian, an elite AI talent intelligence assistant built for senior HR professionals and recruiters. You have already analyzed a candidate document. Answer questions with precision, flag concerns proactively, and give actionable hiring recommendations. Be direct and concise (3-4 sentences). Document context: ${context}`
-    : `You are Meridian, an elite AI talent intelligence assistant for HR professionals and recruiters. Provide precise, actionable insights. Be professional, direct, and concise (3-4 sentences max).`;
+    ? `You are Meridian, an elite AI talent intelligence assistant built for senior HR professionals and recruiters. You have already analyzed a candidate document. Answer questions with precision, flag concerns proactively, and give actionable hiring recommendations. Be direct and concise (2-4 complete sentences). ${languageDirective} Document context: ${context}`
+    : `You are Meridian, an elite AI talent intelligence assistant for HR professionals and recruiters. Provide precise, actionable insights. Be professional, direct, and concise (2-4 complete sentences). ${languageDirective}`;
   try {
     const response = await client.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
@@ -120,7 +153,7 @@ export async function getIntelligentResponse(
         ...(history ?? []).map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
         { role: 'user' as const, content: userText },
       ],
-      max_tokens: 400,
+      max_tokens: 650,
     });
     return response.choices[0].message.content || '';
   } catch (err: any) {
@@ -128,25 +161,127 @@ export async function getIntelligentResponse(
   }
 }
 
+const buildSuggestionContext = (context: string): string => {
+  try {
+    const parsed = JSON.parse(context);
+    const documentType = parsed?.document_type || 'Unknown';
+    const summary = parsed?.summary || '';
+
+    const extractedEntries = Object.entries(parsed?.extracted_fields || {})
+      .map(([key, val]: [string, any]) => {
+        const value = typeof val === 'string' ? val : (val?.value ?? '');
+        return [key, String(value)] as [string, string];
+      })
+      .filter(([, value]) => value && value.trim())
+      .slice(0, 16);
+
+    const entities = Array.isArray(parsed?.detected_entities)
+      ? parsed.detected_entities.slice(0, 12)
+      : [];
+
+    const anomalies = Array.isArray(parsed?.anomalies)
+      ? parsed.anomalies
+          .slice(0, 6)
+          .map((a: any) => ({ type: a?.type || 'info', severity: a?.severity || 'low', description: a?.description || '' }))
+      : [];
+
+    return JSON.stringify({
+      document_type: documentType,
+      summary,
+      extracted_fields: extractedEntries,
+      detected_entities: entities,
+      anomalies,
+    });
+  } catch {
+    return context.slice(0, 2200);
+  }
+};
+
+const fallbackQuestionsFromContext = (context: string, lang: 'en' | 'ar'): string[] => {
+  try {
+    const parsed = JSON.parse(context);
+    const docType = String(parsed?.document_type || '').toLowerCase();
+    const fields = Object.keys(parsed?.extracted_fields || {}).slice(0, 6).map(f => f.replace(/_/g, ' '));
+    const firstField = fields[0] || (lang === 'ar' ? 'البيانات الأساسية' : 'key details');
+
+    if (lang === 'ar') {
+      if (docType.includes('resume') || docType.includes('cv')) {
+        return [
+          `ما أقوى نقطة في ${firstField} لدى المرشح؟`,
+          'ما أهم فجوة قد تؤثر على القرار؟',
+          'ما مدى ملاءمة المرشح للدور المطلوب؟',
+          'اقترح 3 أسئلة مقابلة مبنية على هذا الملف'
+        ];
+      }
+      return [
+        `ما أهم ملاحظة مرتبطة بـ ${firstField}؟`,
+        'هل توجد نقاط خطر يجب التحقق منها؟',
+        'ما أهم 3 خطوات تحقق قبل الاعتماد؟',
+        'ما ملخص التوصية النهائية بناءً على المستند؟'
+      ];
+    }
+
+    if (docType.includes('resume') || docType.includes('cv')) {
+      return [
+        `What is the strongest signal in ${firstField}?`,
+        'What is the biggest risk or gap to validate?',
+        'How strong is this candidate fit for the target role?',
+        'Suggest 3 interview questions based on this profile'
+      ];
+    }
+
+    return [
+      `What is the most important signal in ${firstField}?`,
+      'Any critical red flags that require verification?',
+      'What 3 checks should be done before approval?',
+      'What is the final recommendation based on this document?'
+    ];
+  } catch {
+    return lang === 'ar'
+      ? ['ما أهم نقطة قوة في المستند؟', 'هل توجد علامات خطر واضحة؟', 'ما أهم نقطة تحتاج تحقق إضافي؟', 'ما التوصية النهائية؟']
+      : ['What is the strongest signal in this document?', 'Any clear red flags?', 'What needs further validation?', 'What is the final recommendation?'];
+  }
+};
+
 export async function generateSuggestions(context: string, lang: 'en' | 'ar' = 'en'): Promise<string[]> {
   ensureApiKey();
+  const conciseContext = buildSuggestionContext(context);
   const prompt = lang === 'ar'
-    ? `بناءً على سياق المستند التالي، اقترح 4 أسئلة قصيرة مفيدة يمكن لمسؤول التوظيف طرحها. أرجع فقط مصفوفة JSON من النصوص. لا تضف أي شرح. السياق: ${context}`
-    : `Based on this document context, suggest 4 short useful questions an HR professional might ask. Return ONLY a JSON array of strings. No explanation. Context: ${context}`;
+    ? `لديك تحليل مستند حقيقي. أنشئ 4 أسئلة قصيرة دقيقة جدًا ومبنية على التفاصيل الموجودة فعلًا في السياق.
+الشروط:
+- اجعل كل سؤال مرتبطًا بحقل أو كيان أو ملاحظة من السياق.
+- تجنب الأسئلة العامة أو المكررة.
+- لا تضف أي مقدمة أو شرح.
+أرجع JSON فقط بهذا الشكل: {"questions":["...","...","...","..."]}
+السياق: ${conciseContext}`
+    : `You have a real document analysis context. Generate 4 concise, high-value questions grounded in the actual context details.
+Rules:
+- Each question should map to a real field, entity, risk, or insight in context.
+- Avoid generic or repetitive questions.
+- No explanation text.
+Return JSON ONLY in this shape: {"questions":["...","...","...","..."]}
+Context: ${conciseContext}`;
   try {
     const response = await client.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
       messages: [{ role: 'user' as const, content: prompt }],
-      max_tokens: 200,
+      max_tokens: 260,
       response_format: { type: 'json_object' },
     });
     const raw = response.choices[0].message.content || '{}';
     const parsed = JSON.parse(raw);
     const arr = Array.isArray(parsed) ? parsed : (parsed.questions ?? parsed.suggestions ?? Object.values(parsed)[0]);
-    return Array.isArray(arr) ? arr.slice(0, 4).map(String) : [];
+    if (!Array.isArray(arr)) return fallbackQuestionsFromContext(context, lang);
+
+    const cleaned = arr
+      .map(String)
+      .map(q => q.trim())
+      .filter(Boolean)
+      .filter((q, i, all) => all.findIndex(x => x.toLowerCase() === q.toLowerCase()) === i)
+      .slice(0, 4);
+
+    return cleaned.length === 4 ? cleaned : fallbackQuestionsFromContext(context, lang);
   } catch {
-    return lang === 'ar'
-      ? ['لخص المؤهلات الرئيسية', 'هل توجد نقاط تخوف؟', 'ما درجة ملاءمة المرشح؟', 'اقترح أسئلة للمقابلة']
-      : ['Summarize key qualifications', 'Any red flags?', 'Rate overall candidate fit', 'Suggest interview questions'];
+    return fallbackQuestionsFromContext(context, lang);
   }
 }

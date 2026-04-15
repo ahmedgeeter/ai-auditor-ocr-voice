@@ -15,8 +15,17 @@ interface ChatMsg {
   ts: string; 
 }
 
+const isArabicText = (text: string) => {
+  if (!text?.trim()) return false;
+  const arabicMatches = text.match(/[\u0600-\u06FF]/g) || [];
+  return arabicMatches.length >= Math.max(8, Math.floor(text.length * 0.15));
+};
+
+const hasLatinText = (text: string) => /[A-Za-z]/.test(text || '');
+
 export default function Voice({ context, isDark = false, onVoiceSuccess }: VoiceProps) {
   const [voiceState, setVoiceState] = useState<VoiceState>('idle');
+  const [uiLang, setUiLang] = useState<'en' | 'ar'>('en');
   const [liveTranscript, setLiveTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [chatHistory, setChatHistory] = useState<ChatMsg[]>([]);
@@ -37,17 +46,124 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
   const chatHistoryRef = useRef<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
+  const theme = {
+    bg: isDark ? 'bg-slate-800' : 'bg-white',
+    bgSecondary: isDark ? 'bg-slate-700' : 'bg-slate-100',
+    text: isDark ? 'text-white' : 'text-slate-900',
+    textSecondary: isDark ? 'text-slate-300' : 'text-slate-600',
+    textMuted: isDark ? 'text-slate-400' : 'text-slate-500',
+    border: isDark ? 'border-slate-700' : 'border-slate-200',
+    borderSecondary: isDark ? 'border-slate-600' : 'border-slate-100',
+  };
+
+  const copy = {
+    en: {
+      title: 'Voice Assistant',
+      subtitle: 'Ask questions about the analyzed document',
+      voiceOn: 'Voice On',
+      voiceOff: 'Voice Off',
+      suggestedQuestions: 'Suggested Questions',
+      suggestionHint: 'Generated from extracted document signals',
+      conversation: 'Conversation',
+      clear: 'Clear',
+      startHint: 'Tap Start to begin recording',
+      recordHint: 'Recording in progress',
+      transcribingHint: 'Converting speech to text...',
+      thinkingHint: 'AI is processing...',
+      speakingHint: 'Assistant is speaking',
+      start: 'Start',
+      send: 'Send',
+      cancel: 'Cancel',
+      stop: 'Stop',
+      pause: 'Pause',
+      resume: 'Resume',
+      noMessages: 'Start by speaking or typing a question',
+      you: 'You',
+      ai: 'AI',
+      readAloud: 'Read aloud',
+      thinking: 'Thinking...',
+      inputPlaceholder: 'Ask anything about the document...',
+      analyzeContextMissing: 'No document context found. Results may be generic.',
+      noSpeechCaptured: 'No speech captured.',
+      noSpeechDetected: 'No speech detected.',
+      micDenied: 'Microphone access denied.',
+      micUnavailable: 'Microphone unavailable.',
+      aiRequestFailed: 'AI request failed.',
+      transcriptionFailed: 'Transcription failed.',
+      noArabicVoice: 'Arabic voice is not available on this device/browser.',
+    },
+    ar: {
+      title: 'المساعد الصوتي',
+      subtitle: 'اسأل عن المستند الذي تم تحليله',
+      voiceOn: 'الصوت مفعل',
+      voiceOff: 'الصوت متوقف',
+      suggestedQuestions: 'أسئلة مقترحة',
+      suggestionHint: 'تم توليدها من إشارات المستند المستخرجة',
+      conversation: 'المحادثة',
+      clear: 'مسح',
+      startHint: 'اضغط بدء لبدء التسجيل',
+      recordHint: 'جاري التسجيل',
+      transcribingHint: 'جاري تحويل الصوت إلى نص...',
+      thinkingHint: 'جاري المعالجة...',
+      speakingHint: 'المساعد يتحدث الآن',
+      start: 'بدء',
+      send: 'إرسال',
+      cancel: 'إلغاء',
+      stop: 'إيقاف',
+      pause: 'إيقاف مؤقت',
+      resume: 'استئناف',
+      noMessages: 'ابدأ بالتحدث أو كتابة سؤال',
+      you: 'أنت',
+      ai: 'الذكاء الاصطناعي',
+      readAloud: 'قراءة بصوت',
+      thinking: 'يفكر...',
+      inputPlaceholder: 'اكتب أي سؤال عن المستند...',
+      analyzeContextMissing: 'لا يوجد سياق مستند. قد تكون الإجابات عامة.',
+      noSpeechCaptured: 'لم يتم التقاط صوت.',
+      noSpeechDetected: 'لم يتم اكتشاف صوت.',
+      micDenied: 'تم رفض إذن الميكروفون.',
+      micUnavailable: 'الميكروفون غير متاح.',
+      aiRequestFailed: 'فشل طلب الذكاء الاصطناعي.',
+      transcriptionFailed: 'فشل تحويل الصوت إلى نص.',
+      noArabicVoice: 'لا يوجد صوت عربي متاح على هذا الجهاز أو المتصفح.',
+    }
+  }[uiLang];
+
   useEffect(() => { stateRef.current = voiceState; }, [voiceState]);
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatHistory]);
 
   // Load suggestions
   useEffect(() => {
     if (!context) {
-      setSuggestions(['What are the key qualifications?', 'Any red flags?', 'Rate candidate fit', 'Suggest interview questions']);
+      setSuggestions(
+        uiLang === 'ar'
+          ? ['ما أهم نقاط القوة؟', 'هل توجد علامات خطر؟', 'ما مدى ملاءمة المرشح؟', 'اقترح أسئلة مقابلة']
+          : ['What are the key qualifications?', 'Any red flags?', 'Rate candidate fit', 'Suggest interview questions']
+      );
       return;
     }
-    generateSuggestions(context, 'en').then(s => setSuggestions(s));
-  }, [context]);
+    generateSuggestions(context, uiLang).then(s => setSuggestions(s));
+  }, [context, uiLang]);
+
+  function getPreferredVoice(lang: 'en' | 'ar') {
+    if (!('speechSynthesis' in window)) return null;
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices?.length) return null;
+
+    if (lang === 'ar') {
+      return (
+        voices.find(v => /^ar(-|_)/i.test(v.lang) && /female|zina|amira|hoda/i.test(v.name)) ||
+        voices.find(v => /^ar(-|_)/i.test(v.lang)) ||
+        null
+      );
+    }
+
+    return (
+      voices.find(v => /^en(-|_)/i.test(v.lang) && /female|samantha|aria|jenny|zira/i.test(v.name)) ||
+      voices.find(v => /^en(-|_)/i.test(v.lang)) ||
+      null
+    );
+  }
 
   // TTS Functions
   const speak = useCallback((text: string) => {
@@ -58,7 +174,14 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
     window.speechSynthesis.cancel();
     setIsPaused(false);
     const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = 'en-US';
+    utter.lang = uiLang === 'ar' ? 'ar-SA' : 'en-US';
+    const preferredVoice = getPreferredVoice(uiLang);
+    if (uiLang === 'ar' && !preferredVoice) {
+      setError(copy.noArabicVoice);
+      setVoiceState('idle');
+      return;
+    }
+    if (preferredVoice) utter.voice = preferredVoice;
     utter.rate = 1;
     utter.pitch = 1;
     utter.volume = 1;
@@ -69,7 +192,7 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
     
     utteranceRef.current = utter;
     window.speechSynthesis.speak(utter);
-  }, [ttsEnabled]);
+  }, [ttsEnabled, uiLang, getPreferredVoice, copy.noArabicVoice]);
 
   const stopSpeaking = useCallback(() => {
     if (!('speechSynthesis' in window)) return;
@@ -109,47 +232,57 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
     setVoiceState('thinking');
     try {
       const history = chatHistoryRef.current.slice(-10);
-      const aiResponse = await getIntelligentResponse(text, context, history.slice(0, -1));
+      let aiResponseRaw = await getIntelligentResponse(text, context, history.slice(0, -1), uiLang);
+      if (uiLang === 'ar' && (!isArabicText(aiResponseRaw) || hasLatinText(aiResponseRaw))) {
+        aiResponseRaw = await getIntelligentResponse(`جاوب بالعربية فقط: ${text}`, context, history.slice(0, -1), 'ar');
+      }
+      const cleanedArabic = uiLang === 'ar'
+        ? aiResponseRaw
+            .replace(/\s+/g, ' ')
+            .replace(/\b(assistant|ai|candidate|summary|recommendation)\b/gi, '')
+            .trim()
+        : aiResponseRaw;
+      const aiResponse = uiLang === 'ar' && cleanedArabic.length > 0 ? cleanedArabic : aiResponseRaw;
       if (id !== recordingId.current) return;
       addMsg('assistant', aiResponse);
       onVoiceSuccess?.(text, aiResponse);
       speak(aiResponse);
     } catch (err: any) {
       if (id !== recordingId.current) return;
-      setError(err.message || 'AI request failed.');
+      setError(err.message || copy.aiRequestFailed);
       setVoiceState('idle');
     }
-  }, [context, onVoiceSuccess, speak]);
+  }, [context, onVoiceSuccess, speak, copy.aiRequestFailed, uiLang]);
 
   const handleLiveEnd = useCallback((id: number) => {
     const text = finalTextRef.current.trim();
     setLiveTranscript('');
     if (!text) { 
-      setError('No speech captured.'); 
+      setError(copy.noSpeechCaptured); 
       setVoiceState('idle'); 
       return; 
     }
     runAI(text, id);
-  }, [runAI]);
+  }, [runAI, copy.noSpeechCaptured]);
 
   const handleBlobEnd = useCallback(async (blob: Blob, id: number) => {
     if (id !== recordingId.current) return;
     setVoiceState('transcribing');
     try {
-      const text = await transcribeAudio(blob);
+      const text = await transcribeAudio(blob, uiLang);
       if (id !== recordingId.current) return;
       if (!text?.trim()) { 
-        setError('No speech detected.'); 
+        setError(copy.noSpeechDetected); 
         setVoiceState('idle'); 
         return; 
       }
       runAI(text, id);
     } catch (err: any) {
       if (id !== recordingId.current) return;
-      setError(err.message || 'Transcription failed.');
+      setError(err.message || copy.transcriptionFailed);
       setVoiceState('idle');
     }
-  }, [runAI]);
+  }, [runAI, copy.noSpeechDetected, copy.transcriptionFailed, uiLang]);
 
   useEffect(() => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -157,7 +290,7 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
     const recognition = new SR();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = 'en-US';
+    recognition.lang = uiLang === 'ar' ? 'ar-SA' : 'en-US';
     recognition.onresult = (event: any) => {
       if (stateRef.current !== 'recording') return;
       let interim = '';
@@ -197,7 +330,7 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
     return () => { 
       try { recognition.abort(); } catch {} 
     };
-  }, [handleLiveEnd]);
+  }, [handleLiveEnd, uiLang, copy.noSpeechCaptured]);
 
   const startRecording = useCallback(async () => {
     if (stateRef.current !== 'idle') return;
@@ -209,7 +342,9 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
     stopReasonRef.current = null;
     setVoiceState('recording');
     
-    if (recognitionRef.current) {
+    const useBrowserRecognition = uiLang === 'en';
+
+    if (useBrowserRecognition && recognitionRef.current) {
       try { 
         recognitionRef.current.start(); 
         return; 
@@ -232,7 +367,7 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
         }
         const blob = new Blob(audioChunks.current, { type: mime });
         if (blob.size < 500) { 
-          setError('No audio.'); 
+          setError(copy.noSpeechDetected); 
           setVoiceState('idle'); 
           return; 
         }
@@ -241,26 +376,26 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
       mediaRec.current.start(100);
     } catch (err: any) {
       setVoiceState('idle');
-      setError(err.message?.includes('ermission') ? 'Mic access denied.' : 'Mic unavailable.');
+      setError(err.message?.includes('ermission') ? copy.micDenied : copy.micUnavailable);
     }
-  }, [handleBlobEnd]);
+  }, [handleBlobEnd, copy.micDenied, copy.micUnavailable, uiLang]);
 
   const stopRecording = useCallback(() => {
     if (stateRef.current !== 'recording') return;
     stopReasonRef.current = 'send'; 
     setVoiceState('transcribing');
-    if (recognitionRef.current) {
+    if (uiLang === 'en' && recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch {}
     } else if (mediaRec.current) {
       try { mediaRec.current.stop(); } catch {}
     }
-  }, []);
+  }, [uiLang]);
 
   const cancelRecording = useCallback(() => {
     if (stateRef.current !== 'recording') return;
     recordingId.current = Date.now(); 
     stopReasonRef.current = 'cancel';
-    if (recognitionRef.current) {
+    if (uiLang === 'en' && recognitionRef.current) {
       try { recognitionRef.current.abort(); } catch {}
     }
     if (mediaRec.current) {
@@ -272,7 +407,7 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
     setVoiceState('idle'); 
     setLiveTranscript(''); 
     stopReasonRef.current = null;
-  }, []);
+  }, [uiLang]);
 
   const handleTextSubmit = useCallback(() => {
     const text = textInput.trim();
@@ -321,25 +456,31 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
   const orbStyles = getOrbStyles();
   const isBusy = voiceState !== 'idle' && voiceState !== 'speaking';
 
-  const theme = {
-    bg: isDark ? 'bg-slate-800' : 'bg-white',
-    bgSecondary: isDark ? 'bg-slate-700' : 'bg-slate-100',
-    text: isDark ? 'text-white' : 'text-slate-900',
-    textSecondary: isDark ? 'text-slate-300' : 'text-slate-600',
-    textMuted: isDark ? 'text-slate-400' : 'text-slate-500',
-    border: isDark ? 'border-slate-700' : 'border-slate-200',
-    borderSecondary: isDark ? 'border-slate-600' : 'border-slate-100',
-  };
-
   return (
-    <div className="max-w-4xl mx-auto">
-      {/* Header with TTS Toggle */}
-      <div className="flex items-center justify-between mb-6">
+    <div className="max-w-5xl mx-auto space-y-5" dir={uiLang === 'ar' ? 'rtl' : 'ltr'}>
+      <div className={`rounded-2xl border ${theme.border} p-4 sm:p-5 ${isDark ? 'bg-gradient-to-br from-slate-800 to-slate-900' : 'bg-gradient-to-br from-white to-slate-50'} shadow-sm`}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className={`text-lg font-semibold ${theme.text}`}>Voice Assistant</h2>
-          <p className={`text-sm ${theme.textMuted}`}>Ask questions about the document</p>
+          <h2 className={`text-lg sm:text-xl font-semibold ${theme.text}`}>{copy.title}</h2>
+          <p className={`text-xs sm:text-sm ${theme.textMuted}`}>{copy.subtitle}</p>
         </div>
-        
+
+        <div className="flex items-center gap-2">
+          <div className={`flex items-center rounded-lg border ${theme.border} overflow-hidden ${isDark ? 'bg-slate-800/70' : 'bg-white'}`}>
+            <button
+              onClick={() => setUiLang('en')}
+              className={`px-2.5 py-1 text-xs font-medium ${uiLang === 'en' ? 'bg-indigo-600 text-white' : `${theme.textMuted} ${theme.bg}`}`}
+            >
+              EN
+            </button>
+            <button
+              onClick={() => setUiLang('ar')}
+              className={`px-2.5 py-1 text-xs font-medium ${uiLang === 'ar' ? 'bg-indigo-600 text-white' : `${theme.textMuted} ${theme.bg}`}`}
+            >
+              AR
+            </button>
+          </div>
+
         {/* TTS Toggle Button */}
         <button
           onClick={() => {
@@ -357,7 +498,7 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
               </svg>
-              Voice On
+              {copy.voiceOn}
             </>
           ) : (
             <>
@@ -365,11 +506,19 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
               </svg>
-              Voice Off
+              {copy.voiceOff}
             </>
           )}
         </button>
+        </div>
       </div>
+      </div>
+
+      {!context && (
+        <div className={`mb-4 p-3 rounded-xl border ${isDark ? 'bg-amber-900/20 border-amber-700/40 text-amber-300' : 'bg-amber-50 border-amber-100 text-amber-700'}`}>
+          <p className="text-xs font-medium">{copy.analyzeContextMissing}</p>
+        </div>
+      )}
 
       {/* Floating Orb - Only when TTS is ON */}
       {ttsEnabled && (
@@ -448,12 +597,12 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
           </div>
           
           {/* Status Text */}
-          <p className="mt-4 text-sm font-medium text-slate-600 transition-all duration-300">
-            {voiceState === 'idle' && 'Tap to start recording'}
-            {voiceState === 'recording' && 'Recording... Tap to stop'}
-            {voiceState === 'transcribing' && 'Converting speech to text...'}
-            {voiceState === 'thinking' && 'AI is processing...'}
-            {voiceState === 'speaking' && 'AI is speaking...'}
+          <p className={`mt-4 text-sm font-medium ${theme.textSecondary} transition-all duration-300`}>
+            {voiceState === 'idle' && copy.startHint}
+            {voiceState === 'recording' && copy.recordHint}
+            {voiceState === 'transcribing' && copy.transcribingHint}
+            {voiceState === 'thinking' && copy.thinkingHint}
+            {voiceState === 'speaking' && copy.speakingHint}
           </p>
 
           {/* Control Buttons */}
@@ -467,7 +616,7 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  Send
+                  {copy.send}
                 </button>
                 <button
                   onClick={cancelRecording}
@@ -476,7 +625,7 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
-                  Cancel
+                  {copy.cancel}
                 </button>
               </>
             )}
@@ -491,7 +640,7 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
                   </svg>
-                  Stop
+                  {copy.stop}
                 </button>
                 <button
                   onClick={isPaused ? resumeSpeaking : pauseSpeaking}
@@ -503,18 +652,27 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      Resume
+                      {copy.resume}
                     </>
                   ) : (
                     <>
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      Pause
+                      {copy.pause}
                     </>
                   )}
                 </button>
               </>
+            )}
+
+            {voiceState === 'idle' && (
+              <button
+                onClick={startRecording}
+                className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-all active:scale-95"
+              >
+                {copy.start}
+              </button>
             )}
           </div>
 
@@ -542,18 +700,23 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
 
       {/* Suggestions */}
       {suggestions.length > 0 && chatHistory.length === 0 && (
-        <div className="mb-6">
-          <p className={`text-xs font-medium ${theme.textMuted} uppercase tracking-wide mb-3`}>Suggested Questions</p>
-          <div className="flex flex-wrap gap-2">
+        <div className={`rounded-2xl border ${theme.border} ${theme.bg} p-4 sm:p-5 shadow-sm`}>
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <p className={`text-xs font-semibold ${theme.textMuted} uppercase tracking-wide`}>{copy.suggestedQuestions}</p>
+              <p className={`text-[11px] ${theme.textMuted} mt-1`}>{copy.suggestionHint}</p>
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-2.5">
             {suggestions.map((q, i) => (
               <button
                 key={i}
                 onClick={() => !isBusy && setTextInput(q)}
                 disabled={isBusy}
-                className={`px-3 py-1.5 rounded-full text-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                className={`text-left px-3 py-2.5 rounded-xl text-xs sm:text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed border ${
                   isDark 
-                    ? 'bg-slate-700 border border-slate-600 text-slate-300 hover:border-violet-600 hover:text-violet-300' 
-                    : 'bg-white border border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-sm'
+                    ? 'bg-slate-800 border-slate-700 text-slate-200 hover:border-indigo-500 hover:text-indigo-300' 
+                    : 'bg-white border-slate-200 text-slate-700 hover:border-indigo-300 hover:text-indigo-700 hover:shadow-sm'
                 }`}
               >
                 {q}
@@ -564,23 +727,23 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
       )}
 
       {/* Chat */}
-      <div className={`${theme.bg} rounded-xl shadow-sm border ${theme.border} overflow-hidden`}>
+      <div className={`${theme.bg} rounded-2xl shadow-sm border ${theme.border} overflow-hidden`}>
         <div className={`p-4 border-b ${theme.borderSecondary} flex items-center justify-between`}>
-          <h3 className={`text-sm font-semibold ${theme.text}`}>Conversation</h3>
+          <h3 className={`text-sm font-semibold ${theme.text}`}>{copy.conversation}</h3>
           {chatHistory.length > 0 && (
             <button
               onClick={() => { setChatHistory([]); chatHistoryRef.current = []; }}
-              className={`text-xs ${theme.textMuted} hover:${theme.text} transition-colors`}
+              className={`text-xs transition-colors ${isDark ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900'}`}
             >
-              Clear
+              {copy.clear}
             </button>
           )}
         </div>
 
-        <div className={`h-72 overflow-y-auto p-4 space-y-4 ${isDark ? 'bg-slate-800/50' : ''}`}>
+        <div className={`h-[22rem] overflow-y-auto p-4 space-y-4 ${isDark ? 'bg-slate-800/40' : 'bg-white/70'}`}>
           {chatHistory.length === 0 ? (
             <div className={`h-full flex items-center justify-center ${theme.textMuted}`}>
-              <p className="text-sm">Start by speaking or typing a question</p>
+              <p className="text-sm">{copy.noMessages}</p>
             </div>
           ) : (
             chatHistory.map(msg => (
@@ -595,7 +758,7 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
                       : isDark ? 'bg-slate-700 text-slate-100 rounded-bl-md' : 'bg-slate-100 text-slate-900 rounded-bl-md'
                   }`}
                 >
-                  <p className="text-xs opacity-70 mb-1">{msg.role === 'user' ? 'You' : 'AI'} · {msg.ts}</p>
+                  <p className="text-xs opacity-70 mb-1">{msg.role === 'user' ? copy.you : copy.ai} · {msg.ts}</p>
                   <p className="text-sm leading-relaxed">{msg.content}</p>
                 </div>
                 
@@ -605,7 +768,13 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
                     onClick={() => {
                       window.speechSynthesis.cancel();
                       const utter = new SpeechSynthesisUtterance(msg.content);
-                      utter.lang = 'en-US';
+                      utter.lang = uiLang === 'ar' ? 'ar-SA' : 'en-US';
+                      const preferredVoice = getPreferredVoice(uiLang);
+                      if (uiLang === 'ar' && !preferredVoice) {
+                        setError(copy.noArabicVoice);
+                        return;
+                      }
+                      if (preferredVoice) utter.voice = preferredVoice;
                       utter.rate = 1;
                       utter.pitch = 1;
                       utter.volume = 1;
@@ -616,7 +785,7 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
                         ? isDark ? 'bg-indigo-900/50 text-indigo-400 hover:bg-indigo-900' : 'bg-indigo-100 text-indigo-600 hover:bg-indigo-200'
                         : isDark ? 'bg-slate-700 text-slate-400 hover:bg-slate-600' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
                     }`}
-                    title="Read aloud"
+                    title={copy.readAloud}
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
@@ -636,7 +805,7 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
                   <div className={`w-2 h-2 rounded-full animate-bounce ${isDark ? 'bg-slate-500' : 'bg-slate-400'}`} style={{ animationDelay: '150ms' }} />
                   <div className={`w-2 h-2 rounded-full animate-bounce ${isDark ? 'bg-slate-500' : 'bg-slate-400'}`} style={{ animationDelay: '300ms' }} />
                 </div>
-                <span className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>Thinking...</span>
+                <span className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{copy.thinking}</span>
               </div>
             </div>
           )}
@@ -654,7 +823,7 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
         </div>
 
         {/* Input */}
-        <div className={`p-4 border-t ${theme.borderSecondary} ${isDark ? 'bg-slate-800' : 'bg-slate-50'}`}>
+        <div className={`p-4 border-t ${theme.borderSecondary} ${isDark ? 'bg-slate-800' : 'bg-slate-50/80'}`}>
           <div className="flex gap-3">
             <input
               type="text"
@@ -667,7 +836,7 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
                 } 
               }}
               disabled={isBusy}
-              placeholder="Ask anything about the document..."
+              placeholder={copy.inputPlaceholder}
               className={`flex-1 px-4 py-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50 ${
                 isDark 
                   ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-400' 
@@ -679,7 +848,7 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
               disabled={!textInput.trim() || isBusy}
               className="px-5 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              Send
+              {copy.send}
             </button>
           </div>
         </div>
