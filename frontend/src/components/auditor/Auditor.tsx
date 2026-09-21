@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { auditDocument } from '../../lib/groq';
-import { pdfPageToBase64 } from '../../lib/pdf';
+import { auditDocument } from '../../lib/api';
+import { pdfPageToBase64, getPdfPageCount } from '../../lib/pdf';
 
 interface AuditorProps {
   isDark?: boolean;
@@ -52,6 +52,8 @@ const getDocumentIcon = (type: string) => {
 export default function Auditor({ isDark = false, onAuditSuccess, onExport }: AuditorProps) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [report, setReport] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,38 +77,34 @@ export default function Auditor({ isDark = false, onAuditSuccess, onExport }: Au
 
     if (selectedFile.type === 'application/pdf' || selectedFile.name.toLowerCase().endsWith('.pdf')) {
       try {
+        const count = await getPdfPageCount(selectedFile);
+        setTotalPages(count);
+        setCurrentPage(1);
         const base64 = await pdfPageToBase64(selectedFile, 1);
         setPreview(`data:image/jpeg;base64,${base64}`);
       } catch {
         setError('Failed to load PDF preview');
       }
     } else {
+      setTotalPages(1);
+      setCurrentPage(1);
       const reader = new FileReader();
       reader.onload = (e) => setPreview(e.target?.result as string);
       reader.readAsDataURL(selectedFile);
     }
   };
 
-  const resizeImage = (base64: string, maxWidth = 1600): Promise<string> => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-        if (width > maxWidth) {
-          height = (maxWidth / width) * height;
-          width = maxWidth;
-        }
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.8).split(',')[1]);
-      };
-      img.src = `data:image/jpeg;base64,${base64}`;
-    });
+  const changePage = async (newPage: number) => {
+    if (!file || newPage < 1 || newPage > totalPages) return;
+    setCurrentPage(newPage);
+    try {
+      const base64 = await pdfPageToBase64(file, newPage);
+      setPreview(`data:image/jpeg;base64,${base64}`);
+    } catch (e) {
+      console.error(e);
+    }
   };
+
 
   const runAudit = async () => {
     if (!file) return;
@@ -114,42 +112,8 @@ export default function Auditor({ isDark = false, onAuditSuccess, onExport }: Au
     setError(null);
 
     try {
-      let imageBase64: string;
-      if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-        imageBase64 = await pdfPageToBase64(file, 1);
-      } else {
-        const reader = new FileReader();
-        const rawBase64 = await new Promise<string>((resolve) => {
-          reader.onload = (e) => resolve((e.target?.result as string).split(',')[1]);
-          reader.readAsDataURL(file);
-        });
-        imageBase64 = await resizeImage(rawBase64);
-      }
-
-      const result = await auditDocument(imageBase64);
-
-      // The auditDocument function already cleans the JSON, but double-check here
-      let content = result.content.trim();
-      
-      // Extract JSON from response (handles cases where AI adds text before/after)
-      const firstBrace = content.indexOf('{');
-      const lastBrace = content.lastIndexOf('}');
-      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        content = content.substring(firstBrace, lastBrace + 1);
-      }
-      
-      // Remove any markdown code block remnants and control characters
-      content = content.replace(/```json\s*/gi, '').replace(/```\s*/gi, '');
-      content = content.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
-      // Remove trailing commas before } or ] (invalid JSON from AI)
-      content = content.replace(/,(\s*[}\]])/g, '$1');
-
-      let parsed: any;
-      try {
-        parsed = JSON.parse(content);
-      } catch (parseErr: any) {
-        throw new Error(`AI returned malformed JSON. Please try again. (${parseErr.message})`);
-      }
+      const result = await auditDocument(file);
+      const parsed = result.report;
       setReport(parsed);
       setActiveTab('fields');
       onAuditSuccess?.(parsed);
@@ -388,6 +352,41 @@ export default function Auditor({ isDark = false, onAuditSuccess, onExport }: Au
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                           </svg>
                           <p className="text-white text-xs font-medium">{copy.analyzing}</p>
+                        </div>
+                      )}
+                      {totalPages > 1 && (
+                        <div className={`flex items-center justify-between px-4 py-2 border-t ${theme.border} text-xs ${isDark ? 'bg-slate-800' : 'bg-slate-100'}`}>
+                          <button
+                            type="button"
+                            onClick={() => changePage(currentPage - 1)}
+                            disabled={currentPage <= 1 || loading}
+                            className={`px-3 py-1 rounded font-medium transition-colors ${
+                              currentPage <= 1 || loading
+                                ? 'opacity-40 cursor-not-allowed'
+                                : isDark
+                                ? 'bg-slate-700 hover:bg-slate-600 text-white'
+                                : 'bg-white hover:bg-slate-200 text-slate-800 shadow-sm'
+                            }`}
+                          >
+                            &larr; Prev
+                          </button>
+                          <span className={`font-mono ${theme.textMuted}`}>
+                            Page {currentPage} of {totalPages}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => changePage(currentPage + 1)}
+                            disabled={currentPage >= totalPages || loading}
+                            className={`px-3 py-1 rounded font-medium transition-colors ${
+                              currentPage >= totalPages || loading
+                                ? 'opacity-40 cursor-not-allowed'
+                                : isDark
+                                ? 'bg-slate-700 hover:bg-slate-600 text-white'
+                                : 'bg-white hover:bg-slate-200 text-slate-800 shadow-sm'
+                            }`}
+                          >
+                            Next &rarr;
+                          </button>
                         </div>
                       )}
                     </div>

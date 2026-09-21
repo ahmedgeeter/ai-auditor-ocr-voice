@@ -1,39 +1,27 @@
 # Dependencies
 node_modules/
-.pnp
-.pnp.js
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
 
-# Testing
-/coverage
-
-# Production
-/dist
-
-# Misc
-.DS_Store
-*.pem
-*.log
-
-# Personal/Environment
+# Environment files
 .env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
+backend/.env
+frontend/.env
 
-# Project Specific
-samples/
-*.zip
-*.pdf
-public/samples/
+# Build outputs
+dist/
+build/
+*.egg-info/
 
-# Editor
+# Logs
+logs/
+*.log
+
+# System & IDE files
+.DS_Store
+Thumbs.db
 .vscode/
 .idea/
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-.vercel
-.env*.local

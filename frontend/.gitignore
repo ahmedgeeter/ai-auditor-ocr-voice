@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+/coverage
+
+# Production
+/dist
+
+# Misc
+.DS_Store
+*.pem
+*.log
+
+# Personal/Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Project Specific
+samples/
+*.zip
+*.pdf
+public/samples/
+
+# Editor
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.vercel
+.env*.local

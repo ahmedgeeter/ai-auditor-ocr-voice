@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { getIntelligentResponse, transcribeAudio, generateSuggestions } from '../../lib/groq';
+import { getIntelligentResponse, transcribeAudio, generateSuggestions } from '../../lib/api';
 
 interface VoiceProps {
   context?: string;
@@ -34,6 +34,7 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [ttsEnabled, setTtsEnabled] = useState(true); // TTS toggle
   const [isPaused, setIsPaused] = useState(false); // Pause state for TTS
+  const [silenceCountdown, setSilenceCountdown] = useState<number | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const stateRef = useRef<VoiceState>('idle');
@@ -45,6 +46,13 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
   const stopReasonRef = useRef<'send' | 'cancel' | null>(null);
   const chatHistoryRef = useRef<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const stopRecordingRef = useRef<() => void>(() => {});
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const silenceTimerRef = useRef<any>(null);
+  const vadIntervalRef = useRef<any>(null);
+  const vadCountdownIntervalRef = useRef<any>(null);
+  const hasSpokenRef = useRef(false);
 
   const theme = {
     bg: isDark ? 'bg-slate-800' : 'bg-white',
@@ -145,7 +153,7 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
     generateSuggestions(context, uiLang).then(s => setSuggestions(s));
   }, [context, uiLang]);
 
-  function getPreferredVoice(lang: 'en' | 'ar') {
+  const getPreferredVoice = useCallback((lang: 'en' | 'ar') => {
     if (!('speechSynthesis' in window)) return null;
     const voices = window.speechSynthesis.getVoices();
     if (!voices?.length) return null;
@@ -163,7 +171,7 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
       voices.find(v => /^en(-|_)/i.test(v.lang)) ||
       null
     );
-  }
+  }, []);
 
   // TTS Functions
   const speak = useCallback((text: string) => {
@@ -284,6 +292,94 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
     }
   }, [runAI, copy.noSpeechDetected, copy.transcriptionFailed, uiLang]);
 
+  const cleanupVAD = useCallback(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+    if (vadIntervalRef.current) {
+      clearInterval(vadIntervalRef.current);
+      vadIntervalRef.current = null;
+    }
+    if (vadCountdownIntervalRef.current) {
+      clearInterval(vadCountdownIntervalRef.current);
+      vadCountdownIntervalRef.current = null;
+    }
+    if (audioContextRef.current) {
+      try {
+        audioContextRef.current.close();
+      } catch {
+        // ignore
+      }
+      audioContextRef.current = null;
+    }
+    setSilenceCountdown(null);
+    hasSpokenRef.current = false;
+  }, []);
+
+  const stopRecording = useCallback(() => {
+    if (stateRef.current !== 'recording') return;
+    cleanupVAD();
+    stopReasonRef.current = 'send'; 
+    setVoiceState('transcribing');
+    if (uiLang === 'en' && recognitionRef.current) {
+      try { 
+        recognitionRef.current.stop(); 
+      } catch {
+        // ignore speech recognition stop error
+      }
+    } else if (mediaRec.current) {
+      try { 
+        mediaRec.current.stop(); 
+      } catch {
+        // ignore media recorder stop error
+      }
+    }
+  }, [cleanupVAD, uiLang]);
+
+  useEffect(() => {
+    stopRecordingRef.current = stopRecording;
+  }, [stopRecording]);
+
+  useEffect(() => {
+    return () => {
+      cleanupVAD();
+    };
+  }, [cleanupVAD]);
+
+  const resetSpeechRecognitionSilenceTimer = useCallback(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+    if (vadCountdownIntervalRef.current) {
+      clearInterval(vadCountdownIntervalRef.current);
+      vadCountdownIntervalRef.current = null;
+    }
+
+    let remaining = 3;
+    setSilenceCountdown(remaining);
+
+    vadCountdownIntervalRef.current = setInterval(() => {
+      remaining -= 1;
+      if (remaining > 0) {
+        setSilenceCountdown(remaining);
+      } else {
+        if (vadCountdownIntervalRef.current) {
+          clearInterval(vadCountdownIntervalRef.current);
+          vadCountdownIntervalRef.current = null;
+        }
+      }
+    }, 1000);
+
+    silenceTimerRef.current = setTimeout(() => {
+      if (stateRef.current === 'recording' && hasSpokenRef.current) {
+        cleanupVAD();
+        stopRecordingRef.current();
+      }
+    }, 3000);
+  }, [cleanupVAD]);
+
   useEffect(() => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) return;
@@ -304,8 +400,24 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
         }
       }
       setLiveTranscript(interim.trim());
+      hasSpokenRef.current = true;
+      resetSpeechRecognitionSilenceTimer();
+    };
+    recognition.onspeechstart = () => {
+      hasSpokenRef.current = true;
+      setSilenceCountdown(null);
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+    };
+    recognition.onspeechend = () => {
+      if (hasSpokenRef.current && stateRef.current === 'recording') {
+        resetSpeechRecognitionSilenceTimer();
+      }
     };
     recognition.onerror = (e: any) => {
+      cleanupVAD();
       if (e.error === 'aborted') return;
       if (stateRef.current === 'recording') {
         setError(`Mic error: ${e.error}`); 
@@ -314,6 +426,7 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
       }
     };
     recognition.onend = () => {
+      cleanupVAD();
       const reason = stopReasonRef.current; 
       stopReasonRef.current = null;
       const id = recordingId.current;
@@ -328,18 +441,24 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
     };
     recognitionRef.current = recognition;
     return () => { 
-      try { recognition.abort(); } catch {} 
+      try { 
+        recognition.abort(); 
+      } catch {
+        // cleanup abort safely
+      } 
     };
-  }, [handleLiveEnd, uiLang, copy.noSpeechCaptured]);
+  }, [handleLiveEnd, uiLang, copy.noSpeechCaptured, cleanupVAD, resetSpeechRecognitionSilenceTimer]);
 
   const startRecording = useCallback(async () => {
     if (stateRef.current !== 'idle') return;
+    cleanupVAD();
     recordingId.current = Date.now();
     const id = recordingId.current;
     setError(null); 
     setLiveTranscript('');
     finalTextRef.current = ''; 
     stopReasonRef.current = null;
+    hasSpokenRef.current = false;
     setVoiceState('recording');
     
     const useBrowserRecognition = uiLang === 'en';
@@ -348,7 +467,9 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
       try { 
         recognitionRef.current.start(); 
         return; 
-      } catch {}
+      } catch {
+        // browser speech recognition start failed, fall back to MediaRecorder
+      }
     }
     
     try {
@@ -361,6 +482,12 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
         if (e.data.size > 0) audioChunks.current.push(e.data); 
       };
       mediaRec.current.onstop = () => {
+        try {
+          stream.getTracks().forEach(t => t.stop());
+        } catch {
+          // ignore
+        }
+        cleanupVAD();
         if (stopReasonRef.current === 'cancel') { 
           stopReasonRef.current = null; 
           return; 
@@ -374,40 +501,89 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
         handleBlobEnd(blob, id);
       };
       mediaRec.current.start(100);
+
+      // Web Audio API VAD: Auto-send after 3 seconds of silence following speech
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        try {
+          const audioCtx = new AudioContextClass();
+          const source = audioCtx.createMediaStreamSource(stream);
+          const analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 256;
+          analyser.smoothingTimeConstant = 0.2;
+          source.connect(analyser);
+          audioContextRef.current = audioCtx;
+          analyserRef.current = analyser;
+
+          const buffer = new Uint8Array(analyser.frequencyBinCount);
+          let silenceStart: number | null = null;
+          const SILENCE_LIMIT_MS = 3000;
+          const SPEECH_THRESHOLD = 14;
+
+          vadIntervalRef.current = setInterval(() => {
+            if (stateRef.current !== 'recording') return;
+            analyser.getByteFrequencyData(buffer);
+            let sum = 0;
+            for (let i = 0; i < buffer.length; i++) {
+              sum += buffer[i];
+            }
+            const avg = sum / buffer.length;
+
+            if (avg >= SPEECH_THRESHOLD) {
+              hasSpokenRef.current = true;
+              silenceStart = null;
+              setSilenceCountdown(null);
+            } else if (hasSpokenRef.current) {
+              const now = Date.now();
+              if (!silenceStart) {
+                silenceStart = now;
+              }
+              const diff = now - silenceStart;
+              const remaining = Math.max(1, Math.ceil((SILENCE_LIMIT_MS - diff) / 1000));
+              setSilenceCountdown(remaining);
+
+              if (diff >= SILENCE_LIMIT_MS) {
+                silenceStart = null;
+                cleanupVAD();
+                stopRecordingRef.current();
+              }
+            }
+          }, 100);
+        } catch (e) {
+          console.warn('AudioContext VAD initialization failed:', e);
+        }
+      }
     } catch (err: any) {
+      cleanupVAD();
       setVoiceState('idle');
       setError(err.message?.includes('ermission') ? copy.micDenied : copy.micUnavailable);
     }
-  }, [handleBlobEnd, copy.micDenied, copy.micUnavailable, uiLang]);
-
-  const stopRecording = useCallback(() => {
-    if (stateRef.current !== 'recording') return;
-    stopReasonRef.current = 'send'; 
-    setVoiceState('transcribing');
-    if (uiLang === 'en' && recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch {}
-    } else if (mediaRec.current) {
-      try { mediaRec.current.stop(); } catch {}
-    }
-  }, [uiLang]);
+  }, [cleanupVAD, handleBlobEnd, copy.micDenied, copy.micUnavailable, copy.noSpeechDetected, uiLang]);
 
   const cancelRecording = useCallback(() => {
     if (stateRef.current !== 'recording') return;
+    cleanupVAD();
     recordingId.current = Date.now(); 
     stopReasonRef.current = 'cancel';
     if (uiLang === 'en' && recognitionRef.current) {
-      try { recognitionRef.current.abort(); } catch {}
+      try { 
+        recognitionRef.current.abort(); 
+      } catch {
+        // ignore speech recognition abort error
+      }
     }
     if (mediaRec.current) {
       try { 
         mediaRec.current.stop(); 
         mediaRec.current.stream.getTracks().forEach(t => t.stop()); 
-      } catch {}
+      } catch {
+        // ignore media stream stop error
+      }
     }
     setVoiceState('idle'); 
     setLiveTranscript(''); 
     stopReasonRef.current = null;
-  }, [uiLang]);
+  }, [cleanupVAD, uiLang]);
 
   const handleTextSubmit = useCallback(() => {
     const text = textInput.trim();
@@ -596,14 +772,27 @@ export default function Voice({ context, isDark = false, onVoiceSuccess }: Voice
             )}
           </div>
           
-          {/* Status Text */}
-          <p className={`mt-4 text-sm font-medium ${theme.textSecondary} transition-all duration-300`}>
-            {voiceState === 'idle' && copy.startHint}
-            {voiceState === 'recording' && copy.recordHint}
-            {voiceState === 'transcribing' && copy.transcribingHint}
-            {voiceState === 'thinking' && copy.thinkingHint}
-            {voiceState === 'speaking' && copy.speakingHint}
-          </p>
+          {/* Status Text with Silence Sensor Indicator */}
+          <div className="mt-4 flex flex-col items-center">
+            {voiceState === 'recording' && silenceCountdown ? (
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-500 text-xs font-semibold animate-pulse shadow-sm">
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                <span>
+                  {uiLang === 'ar'
+                    ? `تم استشعار التوقف.. إرسال تلقائي خلال ${silenceCountdown} ثوانٍ`
+                    : `Silence detected.. auto-sending in ${silenceCountdown}s`}
+                </span>
+              </div>
+            ) : (
+              <p className={`text-sm font-medium ${theme.textSecondary} transition-all duration-300`}>
+                {voiceState === 'idle' && copy.startHint}
+                {voiceState === 'recording' && copy.recordHint}
+                {voiceState === 'transcribing' && copy.transcribingHint}
+                {voiceState === 'thinking' && copy.thinkingHint}
+                {voiceState === 'speaking' && copy.speakingHint}
+              </p>
+            )}
+          </div>
 
           {/* Control Buttons */}
           <div className="flex gap-2 mt-3">
